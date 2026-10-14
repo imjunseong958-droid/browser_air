@@ -6,18 +6,25 @@ AIR has no address bar, search entry point, tab list, bookmarks, or browsing-his
 
 ## Install
 
-Download the **AIR-test-apks** artifact from a successful [Android build run](https://github.com/imjunseong958-droid/browser_air/actions/workflows/android.yml), extract it, and choose the APK for your device:
+Download the **AIR** artifact from a successful **main-branch** [Android build run](https://github.com/imjunseong958-droid/browser_air/actions/workflows/android.yml), extract it, and install **AIR.apk**. The archive also includes `SHA256SUMS` for verifying the download.
 
-- **AIR-arm64-test.apk**: most ARM64 Android devices, running **Android 10 or later**.
-- **AIR-x86_64-test.apk**: x86_64 Android emulators.
+AIR supports **ARM64 (`arm64-v8a`) devices running Android 10 or later**. It no longer distributes x86_64 or 32-bit ARM APKs; use an ARM64 emulator for development.
 
-You can also build the APKs locally; the build script writes them to `artifacts/`. APK binaries are excluded from Git. These are test builds signed with a debug key, rather than production releases.
+Distributed APKs use a fixed release signing key and keep the application ID `dev.air.browser`. APK binaries and signing keys are excluded from Git. Pull requests verify debug and unsigned release builds without distributing APKs or accessing release credentials.
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
 Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The only action on the home screen is **Scan QR code**. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
+
+## Updates
+
+Download and install the newer `AIR.apk` over the installed release. Do not uninstall AIR first: Android preserves app data, including settings and the Gecko profile containing cookies and site storage, when the package name and signing certificate match. CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. The user-visible version is maintained as `airVersionName` in `gradle.properties`.
+
+**Migrating from the old test APKs:** previous CI runs generated a different debug key every time. A release cannot replace those installations without the original signing key. If that key is unavailable, one uninstall/reinstall is needed and clears the old app data. Subsequent AIR releases use the fixed release key and can update in place. Android's [signing](https://developer.android.com/studio/publish/app-signing#considerations) and [versioning](https://developer.android.com/studio/publish/versioning) documentation describe these requirements.
+
+Downloading and installing updates is manual. AIR does not yet check for updates or install them from inside the app.
 
 ## What it does
 
@@ -70,11 +77,30 @@ Open this folder in Android Studio, or install JDK 17 and the Android SDK, then 
 bash scripts/build.sh
 ```
 
-Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK location. The script can use local runtimes under `.tools/` when available and generates a local debug signing key. That key is for testing. Keep the browser engine updated for security, and rerun authentication, navigation-policy, and device checks when changing engine versions.
+Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK location. The script can use local runtimes under `.tools/` when available. Its default debug build generates a local debug signing key and writes `artifacts/debug/AIR.apk`; use that APK only for development. It is not interchangeable with the release APK. Keep the browser engine updated for security, and rerun authentication, navigation-policy, and device checks when changing engine versions.
 
 - `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
 - `app/`: native screens, QR scanning, browser sessions, Custom Tabs, and callbacks to other apps.
-- `.github/workflows/android.yml`: builds the app, runs Android Lint and policy tests, and uploads test APKs.
+- `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint and policy tests before uploading the **AIR** artifact.
+
+### Release signing
+
+Create a release keystore **once**, then back up the keystore and passwords outside the checkout. Use that same key for every release; do not regenerate it in CI. Store the following repository Actions secrets:
+
+| Secret | Value |
+|---|---|
+| `AIR_KEYSTORE_BASE64` | Base64-encoded bytes of the fixed release keystore |
+| `AIR_KEYSTORE_PASSWORD` | Keystore password |
+| `AIR_KEY_ALIAS` | Signing key alias |
+| `AIR_KEY_PASSWORD` | Signing key password |
+
+For a local release, export `AIR_KEYSTORE_PATH` (the keystore file path), `AIR_KEYSTORE_PASSWORD`, `AIR_KEY_ALIAS`, and `AIR_KEY_PASSWORD`. Set `AIR_VERSION_CODE` to an integer higher than the installed release when making an update, then run:
+
+```sh
+bash scripts/build.sh release
+```
+
+The output is `artifacts/release/AIR.apk` with `SHA256SUMS`. Keep local version codes consistent with CI; an artificially high local code can prevent installation of subsequent CI builds. Missing signing credentials stop the release script before it publishes any APK. A direct Gradle `assembleRelease` without credentials creates an unsigned APK for verification only. Release credentials are used only by main-branch CI runs, are restored to a temporary file, and are removed when the job finishes.
 
 After building with the script above, connect an Android device or start an emulator to run the instrumented tests:
 

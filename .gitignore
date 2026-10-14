@@ -1,10 +1,13 @@
-.tools/
+.tools
 .gradle/
 **/build/
 local.properties
 .idea/
 *.iml
 *.keystore
+*.jks
 .DS_Store
 artifacts/*.apk
 artifacts/*.aab
+artifacts/debug/
+artifacts/release/

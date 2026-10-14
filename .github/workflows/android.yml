@@ -1,7 +1,11 @@
 name: Android build
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -14,9 +18,43 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-37.2 build-tools;36.0.0'
-      - name: Verify and build
-        run: bash scripts/build.sh
+      - name: Verify pull requests and development builds
+        if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
+        run: |
+          bash scripts/build.sh debug
+          ./gradlew :app:lintRelease :app:assembleRelease --console=plain
+      - name: Restore release signing key
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          AIR_KEYSTORE_BASE64: ${{ secrets.AIR_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "$AIR_KEYSTORE_BASE64" ]]; then
+            printf 'Configure AIR release signing secrets before distributing APKs.\n' >&2
+            exit 1
+          fi
+          printf '%s' "$AIR_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/air-release.keystore"
+      - name: Verify and build AIR
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          AIR_KEYSTORE_PATH: ${{ runner.temp }}/air-release.keystore
+          AIR_KEYSTORE_PASSWORD: ${{ secrets.AIR_KEYSTORE_PASSWORD }}
+          AIR_KEY_ALIAS: ${{ secrets.AIR_KEY_ALIAS }}
+          AIR_KEY_PASSWORD: ${{ secrets.AIR_KEY_PASSWORD }}
+        run: |
+          export AIR_VERSION_CODE="$((1000 + GITHUB_RUN_NUMBER))"
+          bash scripts/build.sh release
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/release/AIR.apk
+          printf 'AIR.apk · ARM64 · versionCode %s\n' "$AIR_VERSION_CODE" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         with:
-          name: AIR-test-apks
-          path: artifacts/*.apk
+          name: AIR
+          path: |
+            artifacts/release/AIR.apk
+            artifacts/release/SHA256SUMS
+          if-no-files-found: error
+      - name: Remove signing key
+        if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: rm -f "$RUNNER_TEMP/air-release.keystore"
