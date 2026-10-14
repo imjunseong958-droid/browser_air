@@ -48,10 +48,13 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 - Identifies Custom Tabs callers through their Binder UID. HTTPS callbacks are delivered to the verified calling app or completed inside AIR. There is no button to hand a blocked page to another browser.
 - Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions.
 - Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream and are limited to 100 MB.
+- Offers optional SMS verification-code input on HTTPS pages. Tap **문자 인증번호 자동 입력** before requesting a new SMS, then approve Android's one-message consent dialog. A clearly labelled code goes into a single standard `autocomplete="one-time-code"` input; ambiguous codes or unmarked inputs require a selection. AIR does not press the site's verification button, although a site may react automatically to input events.
 - Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Notification, autoplay, and tracking-exception requests are denied.
 - Displays the current site in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
 
 ## Compatibility and limits
+
+SMS input assistance requires Google Play services and an SMS received on the same device after waiting begins. It is off until requested for the current page and stops on cancellation, navigation, popup changes, backgrounding (except its own consent dialog), or after five minutes. Existing messages, email/RCS codes, embedded-frame inputs, and codes split across one-character inputs are not supported. A manual fallback remains available. The real Android consent dialog's allow/deny paths were checked with synthetic SMS in an emulator; automated browser checks simulate the consent result. SMS formats and actual device/service compatibility still need testing on physical devices. Non-Google devices retain ordinary keyboard input.
 
 **Real-service login compatibility has not been verified across all providers.** Google, Kakao, Naver, and banking apps still need testing with real accounts on physical devices. Apps that require a specific Chrome package or signature, custom SAML or native authentication flows, unfamiliar CAPTCHA or payment domains, DRM, and provider-specific browser policies may need additional implementation or testing. AIR does not advertise unverified support for Auth Tab, Trusted Web Activities, Digital Asset Links, or Custom Tabs postMessage.
 
@@ -62,6 +65,8 @@ HTTP links are supported for uses such as restaurant menus, with an unencrypted-
 ## Privacy
 
 AIR has no app-owned analytics SDK, advertising SDK, server, or account system, and does not add URL or authentication-code logging. Session lists and navigation policies live in memory. Cookies and site storage needed for sign-in are kept in the device's Gecko profile and can be removed by clearing app data or uninstalling AIR. Cloud backup and device-to-device data transfer are disabled.
+
+SMS assistance uses Google's SMS User Consent API with access to the single message approved in Android. AIR requests neither SMS inbox/read/receive permissions nor notification access. Message text is parsed locally and discarded; codes are held briefly in memory and sent only to the selected input in the same visible document. AIR does not save SMS content or codes, copy them to the clipboard, or send them to an AIR server. Domain-bound SMS codes for other hosts are rejected.
 
 Websites and the browser engine make network requests needed for normal operation. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
 
@@ -80,6 +85,7 @@ The application uses **Java 17**, **Android Views**, and **GeckoView**. GeckoVie
 | GeckoView | 158.0.20261007201254 |
 | AndroidX Browser | 1.10.0 |
 | ZXing Android Embedded | 4.3.0 |
+| Google Play services SMS API | 18.3.1 |
 
 Open this folder in Android Studio, or install JDK 17 and the Android SDK, then run:
 
@@ -122,8 +128,15 @@ python3 -m unittest discover -s scripts/tests -v
 After building with the script above, connect an Android device or start an emulator to run the instrumented tests:
 
 ```sh
-./gradlew :navigation:test :updates:test :app:lintDebug :app:assembleDebugAndroidTest
+./gradlew :navigation:test :updates:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
 ./gradlew :app:connectedDebugAndroidTest
+```
+
+SMS field/bridge regression tests use Node.js 22 or later and jsdom as a development-only dependency:
+
+```sh
+npm ci --prefix scripts
+npm run --prefix scripts test:sms
 ```
 
 Verification uses a local HTTP server and test callback receivers without real accounts. It covers external-site blocking, navigation within a site, script redirects, popups, Custom Tabs, OAuth callbacks, and Firebase certificate, event, and encrypted-field handling. QR decoding was also checked with an image supplied to the emulator camera. See the [verification record](docs/verification.md) for results and remaining checks.
