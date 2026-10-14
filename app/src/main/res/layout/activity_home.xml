@@ -40,5 +40,15 @@
         <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="0.65" />
 
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="@string/home_footer" android:textColor="@color/muted" android:textSize="12sp" />
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/updateButton"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="4dp"
+            android:text="@string/update_check"
+            android:textAllCaps="false"
+            android:textColor="@color/muted"
+            android:textSize="12sp" />
     </LinearLayout>
 </LinearLayout>

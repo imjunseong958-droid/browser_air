@@ -18,6 +18,8 @@ jobs:
       - uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-37.2 build-tools;36.0.0'
+      - name: Verify release metadata and publication
+        run: python3 -m unittest discover -s scripts/tests -v
       - name: Verify pull requests and development builds
         if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
         run: |
@@ -46,6 +48,7 @@ jobs:
           export AIR_VERSION_CODE="$((1000 + GITHUB_RUN_NUMBER))"
           bash scripts/build.sh release
           "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs artifacts/release/AIR.apk
+          python3 scripts/release_manifest.py --apk artifacts/release/AIR.apk --aapt "$ANDROID_HOME/build-tools/36.0.0/aapt" --output artifacts/release/update.json
           printf 'AIR.apk · ARM64 · versionCode %s\n' "$AIR_VERSION_CODE" >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -54,7 +57,28 @@ jobs:
           path: |
             artifacts/release/AIR.apk
             artifacts/release/SHA256SUMS
+            artifacts/release/update.json
           if-no-files-found: error
       - name: Remove signing key
         if: always() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: rm -f "$RUNNER_TEMP/air-release.keystore"
+  publish:
+    name: Publish AIR release
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: air-release-publication
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: AIR
+          path: artifacts/release
+      - name: Publish APK and version manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_release.py
