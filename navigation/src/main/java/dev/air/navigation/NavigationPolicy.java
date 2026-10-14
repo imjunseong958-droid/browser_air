@@ -1,0 +1,273 @@
+package dev.air.navigation;
+
+import java.net.URI;
+import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.LongSupplier;
+
+/** One link, one site. Authentication is a bounded transaction, not a general allowlist. */
+public final class NavigationPolicy {
+    public enum Decision { ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED }
+
+    private static final long AUTH_TIMEOUT_MS = 15 * 60 * 1000L;
+    private static final int MAX_INITIAL_REDIRECTS = 8;
+    private static final int MAX_AUTH_ORIGINS = 8;
+    private static final Set<String> UNSAFE_CALLBACK_SCHEMES = Set.of(
+            "intent", "javascript", "data", "file", "content", "about", "blob", "ftp");
+    private static final Set<String> IDENTITY_HOSTS = Set.of(
+            "accounts.google.com", "accounts.google.co.kr",
+            "kauth.kakao.com", "accounts.kakao.com", "auth.kakao.com",
+            "nid.naver.com", "id.naver.com",
+            "login.microsoftonline.com", "login.live.com", "account.live.com",
+            "appleid.apple.com", "idmsa.apple.com", "account.apple.com",
+            "github.com", "www.facebook.com", "m.facebook.com", "login.yahoo.com",
+            "api.twitter.com", "twitter.com", "x.com", "login.daum.net");
+
+    private final LongSupplier clock;
+    private WebAddress site;
+    private WebAddress pendingInitial;
+    private boolean settled;
+    private int initialRedirects;
+    private AuthTransaction auth;
+    private final List<AuthTransaction> transactions = new ArrayList<>();
+
+    public NavigationPolicy(String initialUrl) {
+        this(initialUrl, () -> System.nanoTime() / 1_000_000L);
+    }
+
+    public NavigationPolicy(String initialUrl, LongSupplier clock) {
+        this.clock = clock;
+        site = WebAddress.parse(initialUrl);
+        if (site == null || isSearch(site)) throw new IllegalArgumentException("Invalid entry URL");
+        pendingInitial = site;
+        registerAuthorization(site, true);
+    }
+
+    public static Decision entryDecision(String url) {
+        WebAddress address = WebAddress.parse(url);
+        if (address == null) return Decision.BLOCK_INVALID;
+        return isSearch(address) ? Decision.BLOCK_SEARCH : Decision.ALLOW;
+    }
+
+    public String lockedHost() { return site.host(); }
+    public boolean isAuthenticating() { return auth != null && !authExpired(); }
+
+    /** After an HTTPS app callback has no installed handler, render its exact web return destination. */
+    public boolean completeWebCallback(String url) {
+        WebAddress callback = WebAddress.parse(url);
+        AuthTransaction returning = callbackTransaction(url);
+        if (callback == null || returning == null || expired(returning)) return false;
+        site = callback;
+        pendingInitial = callback;
+        settled = true;
+        completeTransaction(returning);
+        return true;
+    }
+
+    public Decision evaluate(String url, boolean redirect, boolean userGesture) {
+        AuthTransaction returning = callbackTransaction(url);
+        if (returning != null) {
+            if (expired(returning)) return Decision.BLOCK_EXPIRED;
+            WebAddress callback = WebAddress.parse(url);
+            if (callback != null && site.sameSite(callback)) {
+                completeTransaction(returning);
+                settled = true;
+                return Decision.ALLOW;
+            }
+            return Decision.AUTH_CALLBACK;
+        }
+        WebAddress target = WebAddress.parse(url);
+        if (target == null) return Decision.BLOCK_INVALID;
+        if (isSearch(target)) return Decision.BLOCK_SEARCH;
+        if (transactions.stream().anyMatch(transaction -> sameEndpoint(transaction.callback, target.uri()))
+                && hasAuthResult(target.uri())) return Decision.BLOCK_SITE;
+
+        if (site.sameSite(target)) {
+            registerAuthorization(target, false);
+            if (!settled) pendingInitial = target;
+            return Decision.ALLOW;
+        }
+
+        // Resolve only the original server redirect chain, before a document has loaded.
+        if (!settled && redirect && initialRedirects++ < MAX_INITIAL_REDIRECTS) {
+            if (pendingInitial.scheme().equals("https") && !target.scheme().equals("https")) {
+                return Decision.BLOCK_SITE;
+            }
+            pendingInitial = target;
+            if (auth != null && target.scheme().equals("https")) auth.origins.add(origin(target));
+            registerAuthorization(target, true);
+            return Decision.ALLOW;
+        }
+
+        // OAuth requests may leave the site only when their return URI is scoped to this session.
+        if (target.scheme().equals("https") && !authExpired() && registerAuthorization(target, false)) {
+            return Decision.ALLOW;
+        }
+        if (auth != null) {
+            if (authExpired()) return Decision.BLOCK_EXPIRED;
+            if (target.scheme().equals("https") && auth.origins.contains(origin(target))
+                    && isAuthenticationPage(target)) return Decision.ALLOW;
+            // A server may federate to a new identity host; ordinary links cannot do so.
+            if (redirect && !userGesture && target.scheme().equals("https")
+                    && isAuthenticationPage(target) && auth.origins.size() < MAX_AUTH_ORIGINS) {
+                auth.origins.add(origin(target));
+                return Decision.ALLOW;
+            }
+        }
+        return Decision.BLOCK_SITE;
+    }
+
+    /** Called after the initial redirect chain reaches its first document. */
+    public void pageLoaded(String url) {
+        WebAddress finalAddress = WebAddress.parse(url);
+        if (settled) {
+            if (site.sameSite(finalAddress) && finalAddress.scheme().equals("https")) site = finalAddress;
+            return;
+        }
+        if (finalAddress != null && pendingInitial.sameOrigin(finalAddress)) {
+            site = finalAddress;
+            settled = true;
+        }
+    }
+
+    public Decision evaluateFrame(String url) {
+        WebAddress target = WebAddress.parse(url);
+        if (target == null) return Decision.BLOCK_INVALID;
+        if (isSearch(target) && !isCaptcha(target)) return Decision.BLOCK_SEARCH;
+        if (site.sameSite(target) || (!settled && pendingInitial.sameSite(target)) || isCaptcha(target)) {
+            return Decision.ALLOW;
+        }
+        if (isAuthenticating() && (auth.origins.contains(origin(target)) || IDENTITY_HOSTS.contains(target.host()))
+                && isAuthenticationPage(target)) return Decision.ALLOW;
+        return Decision.BLOCK_SITE;
+    }
+
+    private boolean registerAuthorization(WebAddress target, boolean initial) {
+        Map<String, String> query = target.parameters();
+        String redirectUri = query.get("redirect_uri");
+        String client = query.get("client_id");
+        if (!target.scheme().equals("https") || redirectUri == null || client == null || client.isBlank()
+                || (!query.containsKey("response_type") && !query.containsKey("code_challenge"))
+                || !isAuthenticationPage(target)) return false;
+        URI callback;
+        try {
+            callback = URI.create(redirectUri);
+            if (!callback.isAbsolute() || callback.isOpaque() || callback.getRawFragment() != null || callback.getScheme() == null
+                    || UNSAFE_CALLBACK_SCHEMES.contains(callback.getScheme().toLowerCase(Locale.ROOT))
+                    || callback.getRawUserInfo() != null || redirectUri.contains("\\")) return false;
+        } catch (IllegalArgumentException ignored) { return false; }
+        if (!initial) {
+            WebAddress webCallback = WebAddress.parse(redirectUri);
+            boolean returnsToSite = site.sameSite(webCallback);
+            boolean returnsToTransaction = transactions.stream().anyMatch(transaction -> sameEndpoint(transaction.callback, callback));
+            if (!returnsToSite && !returnsToTransaction) return false;
+        }
+        if (auth == null || !sameEndpoint(auth.callback, callback)) {
+            if (transactions.size() >= 4) return false;
+            auth = new AuthTransaction(callback, query.get("state"), clock.getAsLong());
+            transactions.add(auth);
+        }
+        // A nested authorization request with a different state is not allowed to replace the outer state.
+        if (auth.origins.size() >= MAX_AUTH_ORIGINS && !auth.origins.contains(origin(target))) return false;
+        auth.origins.add(origin(target));
+        return true;
+    }
+
+    private AuthTransaction callbackTransaction(String url) {
+        if (auth == null) return null;
+        try {
+            URI target = URI.create(url);
+            Map<String, String> parameters = callbackParameters(target);
+            if (parameters == null || !hasAuthResult(target)) return null;
+            for (int i = transactions.size() - 1; i >= 0; i--) {
+                AuthTransaction transaction = transactions.get(i);
+                if (!sameEndpoint(transaction.callback, target)) continue;
+                if (transaction.state != null && !transaction.state.equals(parameters.get("state"))) continue;
+                Map<String, String> required = WebAddress.decodeParameters(transaction.callback.getRawQuery());
+                if (parameters.entrySet().containsAll(required.entrySet())) return transaction;
+            }
+            return null;
+        } catch (IllegalArgumentException ignored) { return null; }
+    }
+
+    private static Map<String, String> callbackParameters(URI target) {
+        Map<String, String> query = WebAddress.decodeParameters(target.getRawQuery());
+        Map<String, String> fragment = WebAddress.decodeParameters(target.getRawFragment());
+        if (target.getRawQuery() != null && !target.getRawQuery().isEmpty() && query.isEmpty()) return null;
+        if (target.getRawFragment() != null && !target.getRawFragment().isEmpty() && fragment.isEmpty()) return null;
+        Map<String, String> combined = new java.util.LinkedHashMap<>(query);
+        for (Map.Entry<String, String> part : fragment.entrySet()) {
+            if (combined.putIfAbsent(part.getKey(), part.getValue()) != null) return null;
+        }
+        return combined;
+    }
+
+    private static boolean hasAuthResult(URI target) {
+        Map<String, String> query = WebAddress.decodeParameters(target.getRawQuery());
+        Map<String, String> fragment = WebAddress.decodeParameters(target.getRawFragment());
+        return query.containsKey("code") || query.containsKey("error") || query.containsKey("access_token") || query.containsKey("id_token")
+                || fragment.containsKey("code") || fragment.containsKey("error") || fragment.containsKey("access_token") || fragment.containsKey("id_token");
+    }
+
+    private void completeTransaction(AuthTransaction transaction) {
+        int index = transactions.indexOf(transaction);
+        if (index >= 0) transactions.subList(index, transactions.size()).clear();
+        auth = transactions.isEmpty() ? null : transactions.get(transactions.size() - 1);
+    }
+
+    private static boolean sameEndpoint(URI expected, URI actual) {
+        if (expected.getScheme() == null || actual.getScheme() == null
+                || !expected.getScheme().equalsIgnoreCase(actual.getScheme())) return false;
+        WebAddress a = WebAddress.parse(expected.toString());
+        WebAddress b = WebAddress.parse(actual.toString());
+        if (a != null || b != null) return a != null && a.sameOrigin(b) && a.path().equals(b.path());
+        return java.util.Objects.equals(expected.getAuthority(), actual.getAuthority())
+                && java.util.Objects.equals(expected.getPath(), actual.getPath());
+    }
+
+    private boolean authExpired() { return auth != null && expired(auth); }
+    private boolean expired(AuthTransaction transaction) { return clock.getAsLong() - transaction.startedAt > AUTH_TIMEOUT_MS; }
+    private static String origin(WebAddress value) { return value.scheme() + "://" + value.host() + ":" + value.port(); }
+
+    private static boolean isAuthenticationPage(WebAddress url) {
+        String path = url.normalizedPath().toLowerCase(Locale.ROOT);
+        if (IDENTITY_HOSTS.contains(url.host()) && !url.host().equals("github.com")
+                && !url.host().endsWith("facebook.com") && !url.host().equals("twitter.com")
+                && !url.host().equals("x.com")) return true;
+        return path.matches(".*(?:^|/)(?:oauth2?|authorize|authorization|auth|login|signin|sign-in|sso|saml2?|account|accounts|consent|challenge)(?:/.*|\\.[a-z]+)?$");
+    }
+
+    private static boolean isCaptcha(WebAddress url) {
+        String host = url.host();
+        return ((host.equals("www.google.com") || host.equals("www.recaptcha.net") || host.equals("recaptcha.net"))
+                    && url.normalizedPath().startsWith("/recaptcha/"))
+                || host.equals("challenges.cloudflare.com")
+                || host.equals("hcaptcha.com") || host.endsWith(".hcaptcha.com");
+    }
+
+    public static boolean isSearch(WebAddress url) {
+        String host = url.host().startsWith("www.") ? url.host().substring(4) : url.host();
+        return host.startsWith("google.") || host.equals("bing.com") || host.equals("cn.bing.com")
+                || host.equals("duckduckgo.com") || host.equals("html.duckduckgo.com")
+                || host.equals("lite.duckduckgo.com") || host.equals("search.yahoo.com")
+                || host.equals("search.naver.com") || host.equals("m.search.naver.com")
+                || host.equals("naver.com") || host.equals("m.naver.com")
+                || host.equals("daum.net") || host.equals("m.daum.net") || host.equals("search.daum.net")
+                || host.equals("search.brave.com") || host.equals("ecosia.org")
+                || host.equals("yandex.com") || host.equals("yandex.ru") || host.equals("baidu.com");
+    }
+
+    private static final class AuthTransaction {
+        final URI callback;
+        final String state;
+        final long startedAt;
+        final Set<String> origins = new HashSet<>();
+        AuthTransaction(URI callback, String state, long startedAt) {
+            this.callback = callback; this.state = state; this.startedAt = startedAt;
+        }
+    }
+}

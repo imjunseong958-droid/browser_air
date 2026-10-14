@@ -1,0 +1,1 @@
+QR camera decoded the fixture and opened example.com

@@ -1,0 +1,22 @@
+name: Android build
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install compile platform
+        run: sdkmanager 'platforms;android-37.2' 'build-tools;36.0.0'
+      - name: Verify and build
+        run: bash scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIR-test-apks
+          path: artifacts/*.apk

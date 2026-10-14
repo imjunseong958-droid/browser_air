@@ -1,0 +1,20 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity android:name="com.google.firebase.auth.internal.GenericIdpActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="genericidp" android:host="firebase.auth" android:path="/" />
+            </intent-filter>
+        </activity>
+        <activity android:name="dev.air.browser.AuthReceiverActivity" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="air-test-callback" android:host="oauth" android:path="/return" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
