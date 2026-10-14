@@ -1,5 +1,20 @@
 plugins { id("com.android.application") }
 
+val airVersionCode = providers.environmentVariable("AIR_VERSION_CODE")
+    .orElse(providers.gradleProperty("airVersionCode")).get().toIntOrNull()
+require(airVersionCode != null && airVersionCode in 1..2_100_000_000) {
+    "AIR_VERSION_CODE / airVersionCode must be a positive integer at most 2100000000."
+}
+val airVersionName = providers.gradleProperty("airVersionName").get()
+require(airVersionName.isNotBlank()) { "airVersionName must not be blank." }
+
+val airSigning = listOf("AIR_KEYSTORE_PATH", "AIR_KEYSTORE_PASSWORD", "AIR_KEY_ALIAS", "AIR_KEY_PASSWORD")
+    .associateWith { providers.environmentVariable(it).orNull }
+val airSigningConfigured = airSigning.values.all { !it.isNullOrBlank() }
+require(airSigningConfigured || airSigning.values.all { it.isNullOrBlank() }) {
+    "Release signing requires AIR_KEYSTORE_PATH, AIR_KEYSTORE_PASSWORD, AIR_KEY_ALIAS and AIR_KEY_PASSWORD."
+}
+
 android {
     namespace = "dev.air.browser"
     compileSdk { version = release(37) { minorApiLevel = 2 } }
@@ -8,31 +23,32 @@ android {
         applicationId = "dev.air.browser"
         minSdk = 29
         targetSdk = 37
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = airVersionCode
+        versionName = airVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     signingConfigs {
         getByName("debug") {
             storeFile = rootProject.file(".tools/debug.keystore")
         }
+        if (airSigningConfigured) {
+            create("airRelease") {
+                storeFile = rootProject.file(airSigning.getValue("AIR_KEYSTORE_PATH")!!)
+                storePassword = airSigning.getValue("AIR_KEYSTORE_PASSWORD")
+                keyAlias = airSigning.getValue("AIR_KEY_ALIAS")
+                keyPassword = airSigning.getValue("AIR_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("airRelease")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-        }
-    }
-
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "x86_64")
-            isUniversalApk = false
         }
     }
 
