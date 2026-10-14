@@ -1,10 +1,16 @@
 package dev.air.browser;
 
+import android.Manifest;
 import android.app.Activity;
+import android.os.Build;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.provider.Telephony;
+import android.telephony.SmsMessage;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -34,30 +40,33 @@ import org.json.JSONObject;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.WebExtension;
 
-/** Optional, five-minute SMS consent tied to one visible document and one Android result. */
+/** Opt-in SMS sign-in, bound to one foreground document and a five-minute receive window. */
 final class BrowserSmsAssist {
     static final String EXTENSION_ID = "sms-assist@air.local";
     private static final String NATIVE_APP = "air_sms";
     private static final long WAIT_MS = 5 * 60_000;
     private enum Phase { STARTING, WAITING, CONSENT, CODES, SCANNING, FIELDS, FILLING }
 
-    interface Source {
-        boolean available(Context context);
-        void start(Context context, Runnable success, Runnable failure);
+    // Android 17 delays OTP broadcasts for ordinary apps. Use its supported one-message API there.
+    private final boolean consentMode = Build.VERSION.SDK_INT >= 37;
+
+    private boolean consentAvailable() {
+        return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity) == ConnectionResult.SUCCESS;
     }
-    private Source source = new Source() {
-        @Override public boolean available(Context context) {
-            return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(context) == ConnectionResult.SUCCESS;
-        }
-        @Override public void start(Context context, Runnable success, Runnable failure) {
-            SmsRetriever.getClient(context).startSmsUserConsent(null)
-                    .addOnSuccessListener(ignored -> success.run()).addOnFailureListener(ignored -> failure.run());
-        }
-    };
+
+    private boolean available() { return consentMode ? consentAvailable() : hasPermission(); }
+
+    private boolean hasPermission() {
+        return ContextCompat.checkSelfPermission(activity, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
 
     private static final class Page {
         final WebExtension.Port port;
         String document;
+        String href;
+        boolean hasTarget;
+        boolean emptyTarget;
+        boolean completed;
         Page(WebExtension.Port port) { this.port = port; }
     }
     private static final class Request {
@@ -66,7 +75,7 @@ final class BrowserSmsAssist {
         final String document;
         final String id;
         final long expires;
-        Phase phase = Phase.STARTING;
+        Phase phase = Phase.WAITING;
         SmsCodeParser.Codes codes;
         String code;
         Request(Page page, String url, long sequence) {
@@ -81,11 +90,15 @@ final class BrowserSmsAssist {
     private final Map<GeckoSession, Page> pages = new IdentityHashMap<>();
     private final Set<GeckoSession> attached = Collections.newSetFromMap(new IdentityHashMap<>());
     private WebExtension extension;
+    private final ActivityResultLauncher<String> permissionLauncher;
     private final ActivityResultLauncher<Intent> consentLauncher;
+    private Request consentRequest;
+    private final SharedPreferences preferences;
+    private boolean enabled;
+    private boolean requestingPermission;
     private BroadcastReceiver receiver;
     private AlertDialog dialog;
     private Request pending;
-    private Request consentRequest;
     private Runnable expiry;
     private long sequence;
     private boolean resumed;
@@ -93,15 +106,34 @@ final class BrowserSmsAssist {
 
     BrowserSmsAssist(BrowserActivity activity, Button button) {
         this.activity = activity; this.button = button;
+        preferences = activity.getSharedPreferences("sms_assist", Context.MODE_PRIVATE);
+        enabled = preferences.getBoolean("enabled", false);
         button.setEnabled(false);
-        button.setOnClickListener(view -> { if (pending == null) begin(); else cancel(); });
+        permissionLauncher = activity.registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+            requestingPermission = false;
+            if (destroyed) return;
+            setEnabled(granted);
+            if (granted) begin();
+            else toast(R.string.sms_permission_denied);
+            refresh();
+        });
         consentLauncher = activity.registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
             Request request = consentRequest;
             consentRequest = null;
-            if (!current(request)) { refresh(); return; }
-            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) { cancel(); return; }
-            // Parse immediately and discard the full SMS. Codes stay in this request's memory only.
+            if (!current(request) || request.phase != Phase.CONSENT) { refresh(); return; }
+            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+                request.page.completed = true; cancel(); return;
+            }
             acceptMessage(request, result.getData().getStringExtra(SmsRetriever.EXTRA_SMS_MESSAGE));
+        });
+        button.setOnClickListener(view -> {
+            if (enabled) { setEnabled(false); cancel(); return; }
+            if (consentMode && !consentAvailable()) { toast(R.string.sms_unavailable); return; }
+            if (available()) { setEnabled(true); begin(); }
+            else {
+                requestingPermission = true;
+                permissionLauncher.launch(Manifest.permission.RECEIVE_SMS);
+            }
         });
     }
 
@@ -139,7 +171,7 @@ final class BrowserSmsAssist {
         if (destroyed || !activity.smsPageAllowed()) return null;
         Page page = pages.get(activity.smsSession());
         WebAddress visible = WebAddress.parse(activity.smsPageUrl());
-        return page != null && page.document != null && visible != null
+        return page != null && page.document != null && activity.smsPageUrl().equals(page.href) && visible != null
                 && visible.sameOrigin(WebAddress.parse(page.port.sender.url)) ? page : null;
     }
 
@@ -151,50 +183,70 @@ final class BrowserSmsAssist {
 
     private void begin() {
         Page page = visiblePage();
-        if (!resumed || page == null || consentRequest != null) return;
-        if (!source.available(activity)) { toast(R.string.sms_unavailable); return; }
+        if (!enabled || !resumed || page == null || !page.hasTarget || pending != null || requestingPermission || consentRequest != null || dialog != null) return;
+        if (!available()) return;
         Request request = new Request(page, activity.smsPageUrl(), ++sequence);
+        request.phase = consentMode ? Phase.STARTING : Phase.WAITING;
         pending = request;
-        expiry = () -> { if (pending == request) { cancel(); if (resumed) toast(R.string.sms_timeout); } };
+        expiry = () -> { if (pending == request) { page.completed = true; cancel(); if (resumed) toast(R.string.sms_timeout); } };
         handler.postDelayed(expiry, WAIT_MS);
         try {
             receiver = new BroadcastReceiver() {
                 @Override public void onReceive(Context context, Intent intent) {
-                    if (!SmsRetriever.SMS_RETRIEVED_ACTION.equals(intent.getAction()) || !current(request)
-                            || !resumed || request.phase != Phase.WAITING) return;
+                    if (!current(request) || !resumed || request.phase != Phase.WAITING || !available()) return;
+                    if (!consentMode) {
+                        if (!Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return;
+                        String message = receivedText(intent);
+                        if (message != null) acceptMessage(request, message);
+                        return;
+                    }
+                    if (!SmsRetriever.SMS_RETRIEVED_ACTION.equals(intent.getAction())) return;
                     Status status = IntentCompat.getParcelableExtra(intent, SmsRetriever.EXTRA_STATUS, Status.class);
                     if (status == null) return;
-                    if (status.getStatusCode() == CommonStatusCodes.TIMEOUT) { cancel(); toast(R.string.sms_timeout); return; }
-                    if (status.getStatusCode() != CommonStatusCodes.SUCCESS) { cancel(); toast(R.string.sms_start_failed); return; }
+                    if (status.getStatusCode() != CommonStatusCodes.SUCCESS) {
+                        page.completed = true; cancel(); return;
+                    }
                     Intent consent = IntentCompat.getParcelableExtra(intent, SmsRetriever.EXTRA_CONSENT_INTENT, Intent.class);
-                    if (consent == null) { cancel(); return; }
+                    if (consent == null || consentRequest != null) return;
                     stopReceiver();
                     request.phase = Phase.CONSENT;
                     consentRequest = request;
                     try { consentLauncher.launch(consent); }
-                    catch (RuntimeException ignored) { consentRequest = null; cancel(); toast(R.string.sms_start_failed); }
+                    catch (RuntimeException ignored) { consentRequest = null; page.completed = true; cancel(); toast(R.string.sms_start_failed); }
                 }
             };
-            // Play services runs under another UID; its signature permission authenticates this receiver.
-            ContextCompat.registerReceiver(activity, receiver, new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION),
-                    SmsRetriever.SEND_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED);
-            source.start(activity, () -> {
-                if (!current(request) || request.phase != Phase.STARTING) return;
-                request.phase = Phase.WAITING;
-                refresh();
-                toast(R.string.sms_wait_hint);
-            }, () -> { if (pending == request) { cancel(); toast(R.string.sms_start_failed); } });
-        } catch (RuntimeException ignored) { cancel(); toast(R.string.sms_start_failed); }
+            // Both receivers authenticate the sending UID with the system/Play services signature permission.
+            String action = consentMode ? SmsRetriever.SMS_RETRIEVED_ACTION : Telephony.Sms.Intents.SMS_RECEIVED_ACTION;
+            String permission = consentMode ? SmsRetriever.SEND_PERMISSION : "android.permission.BROADCAST_SMS";
+            ContextCompat.registerReceiver(activity, receiver, new IntentFilter(action), permission, null, ContextCompat.RECEIVER_EXPORTED);
+            if (consentMode) SmsRetriever.getClient(activity).startSmsUserConsent(null)
+                    .addOnSuccessListener(ignored -> {
+                        if (current(request) && request.phase == Phase.STARTING) { request.phase = Phase.WAITING; refresh(); }
+                    }).addOnFailureListener(ignored -> {
+                        if (pending == request) { page.completed = true; cancel(); toast(R.string.sms_start_failed); }
+                    });
+        } catch (RuntimeException ignored) { page.completed = true; cancel(); toast(R.string.sms_start_failed); }
         refresh();
     }
 
     private void receive(Page page, JSONObject message) {
         String type = message.optString("type");
-        if (type.equals("ready")) {
+        if (type.equals("ready") || type.equals("state")) {
             String document = message.optString("document");
             if (!document.matches("[A-Za-z0-9-]{1,64}")) return;
+            if (type.equals("state") && !document.equals(page.document)) return;
+            String href = message.optString("href");
+            WebAddress address = WebAddress.parse(href);
+            if (address == null || !address.sameOrigin(WebAddress.parse(page.port.sender.url))) return;
             if (pending != null && pending.page == page && !document.equals(pending.document)) cancel();
             page.document = document;
+            page.href = href;
+            boolean hasTarget = message.optBoolean("hasTarget");
+            boolean emptyTarget = message.optBoolean("emptyTarget");
+            if ((!page.hasTarget && hasTarget) || (!page.emptyTarget && emptyTarget)) page.completed = false;
+            page.emptyTarget = emptyTarget;
+            page.hasTarget = hasTarget;
+            if (pending != null && pending.page == page && !hasTarget && pending.phase == Phase.WAITING) cancel();
             refresh();
             return;
         }
@@ -207,14 +259,22 @@ final class BrowserSmsAssist {
         else if (type.equals("filled") && request.phase == Phase.FILLING) {
             boolean success = message.optBoolean("success");
             if (!success) showFallback(request);
-            else { cancel(); toast(R.string.sms_filled); }
+            else { page.completed = true; cancel(); }
         }
     }
 
     private void acceptMessage(Request request, String message) {
-        if (!current(request) || request.phase != Phase.CONSENT) return;
+        if (!current(request) || (request.phase != Phase.WAITING && request.phase != Phase.CONSENT)
+                || (!resumed && request.phase != Phase.CONSENT)) return;
         WebAddress address = WebAddress.parse(request.url);
         request.codes = SmsCodeParser.parse(message, address == null ? null : address.host());
+        // Unrelated messages (including wrong-host codes) must not end the active wait.
+        if (request.codes.values().isEmpty()) {
+            request.codes = null;
+            if (request.phase == Phase.CONSENT) { request.page.completed = true; cancel(); toast(R.string.sms_no_code); }
+            return;
+        }
+        stopReceiver();
         request.phase = Phase.CODES;
         if (resumed) chooseCode(request);
     }
@@ -223,7 +283,7 @@ final class BrowserSmsAssist {
         if (!current(request) || !resumed) return;
         List<String> codes = request.codes.values();
         if (codes.isEmpty()) { cancel(); toast(R.string.sms_no_code); return; }
-        if (request.codes.unambiguous()) { scan(request, codes.get(0)); return; }
+        if (codes.size() == 1) { scan(request, codes.get(0)); return; }
         dialog = new AlertDialog.Builder(activity).setTitle(R.string.sms_choose_code)
                 .setItems(codes.toArray(new String[0]), (d, which) -> { dialog = null; scan(request, codes.get(which)); })
                 .setNegativeButton(R.string.cancel, (d, which) -> cancel())
@@ -268,8 +328,6 @@ final class BrowserSmsAssist {
         if (!current(request) || !resumed) { cancel(); return; }
         request.phase = Phase.FILLING;
         post(request, "fill", field);
-        // Do not retain a code while waiting for an acknowledgement.
-        request.code = null;
         expireResponse(request, Phase.FILLING);
     }
 
@@ -277,19 +335,21 @@ final class BrowserSmsAssist {
         try {
             JSONObject message = new JSONObject().put("type", type).put("request", request.id)
                     .put("document", request.document).put("href", request.url);
-            if (field != null) message.put("field", field).put("code", request.code);
+            if (request.code != null) message.put("code", request.code);
+            if (field != null) message.put("field", field);
             request.page.port.postMessage(message);
-        } catch (JSONException | RuntimeException ignored) { cancel(); toast(R.string.sms_input_failed); }
+        } catch (JSONException | RuntimeException ignored) { request.page.completed = true; cancel(); toast(R.string.sms_input_failed); }
     }
 
     private void expireResponse(Request request, Phase phase) {
         handler.postDelayed(() -> {
-            if (pending == request && request.phase == phase) { cancel(); if (resumed) toast(R.string.sms_input_failed); }
+            if (pending == request && request.phase == phase) { request.page.completed = true; cancel(); if (resumed) toast(R.string.sms_input_failed); }
         }, 5000);
     }
 
     private void showFallback(Request request) {
         String code = request.code;
+        request.page.completed = true;
         cancel();
         if (code == null) { toast(R.string.sms_input_failed); return; }
         dialog = new AlertDialog.Builder(activity).setTitle(R.string.sms_manual_title)
@@ -321,7 +381,7 @@ final class BrowserSmsAssist {
         if (expiry != null) handler.removeCallbacks(expiry);
         expiry = null;
         if (dialog != null) { dialog.dismiss(); dialog = null; }
-        refresh();
+        updateButton();
     }
 
     void pageStarted(GeckoSession session) {
@@ -345,24 +405,60 @@ final class BrowserSmsAssist {
         if (extension != null) session.getWebExtensionController().setMessageDelegate(extension, null, NATIVE_APP);
     }
 
+    private void setEnabled(boolean value) {
+        enabled = value;
+        preferences.edit().putBoolean("enabled", value).apply();
+        Page page = visiblePage();
+        if (page != null) page.completed = false;
+    }
+
     void refresh() {
         if (destroyed) return;
-        button.setText(pending == null ? R.string.sms_assist
+        Page page = visiblePage();
+        if (resumed && enabled && page != null && page.hasTarget && !page.completed
+                && pending == null && dialog == null && !requestingPermission && consentRequest == null && available()) begin();
+        updateButton();
+    }
+
+    private void updateButton() {
+        if (destroyed) return;
+        Page page = visiblePage();
+        button.setText(!enabled ? R.string.sms_assist
+                : pending == null ? R.string.sms_enabled
                 : pending.phase == Phase.STARTING ? R.string.sms_preparing
-                : pending.phase == Phase.WAITING ? R.string.sms_waiting : R.string.sms_filling);
-        button.setEnabled(pending != null || (visiblePage() != null && consentRequest == null && dialog == null));
+                : pending.phase == Phase.WAITING ? (consentMode ? R.string.sms_waiting_consent : R.string.sms_waiting) : R.string.sms_filling);
+        button.setEnabled(!requestingPermission && consentRequest == null && (enabled || page != null));
     }
 
     void pause() {
         resumed = false;
-        if (pending == null || pending.phase != Phase.CONSENT) cancel();
+        if (pending == null || pending != consentRequest || pending.phase != Phase.CONSENT) cancel();
     }
 
     void resume() {
         resumed = true;
         if (pending != null && !current(pending)) cancel();
+        if (enabled && !available()) setEnabled(false);
         if (pending != null && pending.phase == Phase.CODES) chooseCode(pending);
         refresh();
+    }
+
+    /** Decode this broadcast only, including multipart SMS, without querying stored messages. */
+    static String receivedText(Intent intent) {
+        if (intent == null || !Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return null;
+        try {
+            SmsMessage[] parts = Telephony.Sms.Intents.getMessagesFromIntent(intent);
+            if (parts == null || parts.length == 0 || parts.length > 64) return null;
+            StringBuilder text = new StringBuilder();
+            String sender = parts[0] == null ? null : parts[0].getOriginatingAddress();
+            if (sender == null) return null;
+            for (SmsMessage part : parts) {
+                if (part == null || !sender.equals(part.getOriginatingAddress()) || part.getMessageBody() == null) return null;
+                text.append(part.getMessageBody());
+                if (text.length() > 8192) return null;
+            }
+            return text.toString();
+        } catch (RuntimeException ignored) { return null; }
     }
 
     void destroy() {

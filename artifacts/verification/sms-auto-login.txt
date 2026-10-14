@@ -1,0 +1,34 @@
+AIR SMS automatic sign-in verification — 15 October 2026 (Asia/Seoul)
+
+Device: ARM64 Pixel 7 emulator, Android 15 / API 35.
+All SMS and codes are synthetic; no real accounts or credentials were used.
+
+Automated checks:
+- navigation: 35 passed
+- updates: 14 passed
+- parser: 11 passed
+- emulator: 28 passed
+- JavaScript: 22 passed
+- publication: 9 passed
+- Total: 119 passed, 0 failed.
+
+Build inspection:
+- debug: built; ARM64 only; packaged SMS assets exactly match source (extension 2.2); Lint errors: 0.
+  SHA-256: 8c5447933b36d92a7bbe1f419dbcdb4d5bfda255e435935f8ba098ee61280d4a
+- release: built; ARM64 only; packaged SMS assets exactly match source (extension 2.2); Lint errors: 0.
+  SHA-256: 132d74079ae145dc9244715d09c9584f2a69ef132a4f740c1f2f12d51f9ef1be
+- Debug APK verifies with APK Signature Scheme v2. Release verification used an unsigned APK.
+- APK permissions include RECEIVE_SMS. READ_SMS, SEND_SMS and notification-listener access are absent.
+
+Real Android SMS broadcast smoke checks:
+- On a fresh debug installation, tap the enable footer and Android runtime SMS Allow once.
+- adb emu sms send 15551230000 "Your verification code is 001234."
+- AIR fills 001234, activates the verification form, and navigates to /done (AUTO_LOGIN_COMPLETE) without any further taps.
+- Force-stop and reopen a second verification URL: the saved opt-in starts waiting automatically without enable/permission taps.
+- Deliver a second synthetic SMS: AIR again navigates to AUTO_LOGIN_COMPLETE, with zero taps after opening that page.
+
+Limits:
+- Production assistance is HTTPS-only; localhost HTTP fixtures are allowed only in debug builds.
+- Android 17+ uses SMS User Consent because of OS OTP broadcast restrictions. Its per-message Allow tap remains necessary.
+- Actual Android 17 OS behavior, physical-device/carrier SMS, installer policies and arbitrary real-service forms still need device coverage.
+- No release was signed or published by these checks.

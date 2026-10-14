@@ -1,6 +1,6 @@
 # Verification record
 
-Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS input assistance was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
+Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
 ## Build and installation
 
@@ -13,7 +13,7 @@ Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. 
 
 **35 policy unit tests** covered URL parsing, deceptive domains, subdomains and ports, HTTPS upgrades, search domains, initial redirects, iframes, authentication-path manipulation, OAuth callback state, nested authentication, authentication expiry, and Firebase SDK event and callback formats.
 
-**15 emulator browser integration tests** passed. The original seven checks verified the following:
+**21 emulator browser integration tests** passed. The original seven checks verified the following:
 
 1. A search link shows a blocked page without starting an engine session.
 2. Links within the site open, while links to another host do not send a request.
@@ -23,15 +23,19 @@ Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. 
 6. Custom Tabs binding, session creation, warmup, and page-completion callbacks work.
 7. A Firebase SDK callback activity pinned to the installed app's certificate receives the matching event and encrypted `link` field; a wrong event is blocked.
 
-The eight added SMS checks covered opt-in and standard-field filling without submitting, explicit selection of ambiguous codes and unmarked fields, discarding an old consent result after navigation, cancellation/backgrounding, rejecting codes bound to another host, manual fallback for split fields, and ignoring malformed SMS broadcasts. These automated checks simulate the successful Android consent result and use the real GeckoView content bridge.
+The fourteen SMS checks cover waiting only on recognized verification screens, initial opt-in followed by automatic input and verification, identifying a labelled field without touching the phone field, single unlabelled code handling, ambiguous-code fallback, automatic waiting after navigation/app restart, rejecting stale messages, disabling the saved setting, background cancellation and automatic rearming, unrelated/wrong-host messages, split-input filling, malformed broadcasts, and consent results delivered before resume. These checks inject only the SMS body (or simulate the Android consent phase) and use the real GeckoView bridge and HTML forms. **Seven emulator update integration tests** also passed.
 
-**11 SMS parser unit tests**, **8 JavaScript field/bridge tests**, **14 update unit tests**, and **9 release-publication tests** also passed. The parser checks leading zeroes, Korean/English and alphanumeric codes, ambiguous candidates, domain binding, and avoiding phone/date/amount fragments. Field tests cover hidden/inert/edited inputs, form events, request/document/URL matching, cancellation, and back-navigation reconnects. Both debug and release Android Lint finished with zero errors (21 dependency/layout warnings).
+**11 SMS parser unit tests**, **22 JavaScript field/bridge tests**, **14 update unit tests**, **35 navigation unit tests**, and **9 release-publication tests** passed. The JavaScript checks include controlled form events and delayed button enablement, submitting exactly once, cancellation between input and submission, refusing payment/transfer controls, split widgets with edited/disabled digits, late-mounted widgets, and automatic retry detection. Both debug and optimized unsigned release APKs built and Android Lint finished with zero errors.
 
-## SMS consent on the emulator
+## SMS sign-in on the emulator
 
-The real SMS User Consent API was also checked with Google Play services **24.23.35** in the emulator, without a mock SMS client. A synthetic SMS was delivered through the emulator console to a local test page forwarded with `adb reverse`. The Android dialog asked whether AIR could read that one message. Selecting **Allow** returned to AIR and filled **001234**, preserving the leading zeroes. Selecting **Deny** for a second message left the input empty and ended the wait. Neither path sent a real carrier SMS or used a real service account.
+On Android 10–16, AIR uses a dynamically registered `SMS_RECEIVED_ACTION` receiver after the user's explicit opt-in and Android runtime `RECEIVE_SMS` grant. A single approval enables subsequent recognized verification screens; no per-message Android dialog or normal code/field selection is needed. The receiver is authenticated with `BROADCAST_SMS`, and message text is discarded after parsing. The merged manifest requests `RECEIVE_SMS` but has no `READ_SMS`, `SEND_SMS`, or notification-listener permission.
 
-The production feature is limited to HTTPS pages. Debug builds allow localhost/127.0.0.1 HTTP fixtures for testing. The merged app manifest contains no `READ_SMS`, `RECEIVE_SMS`, or notification-listener permission. APK inspection confirmed that the packaged SMS scripts match the checked source and that the APK contains only ARM64 native libraries. See `artifacts/screenshots/sms-auto-input.png` and `artifacts/verification/sms-assist.txt` for evidence.
+A fresh debug installation was also checked through the real Android runtime SMS permission dialog and emulator telephony broadcast. After the enable action and one permission Allow tap, `adb emu sms send` delivered a synthetic verification code **001234**. AIR filled it, activated the fixture's verification form and navigated to **AUTO_LOGIN_COMPLETE**, with no message/code/field/verification taps. After force-stopping and reopening another verification URL, the saved preference automatically armed reception; a second synthetic SMS completed the flow with zero taps after opening the page. No real carrier SMS or real service account was used.
+
+Android 17 [protects OTP broadcasts](https://developer.android.com/about/versions/17/behavior-changes-17), including ordinary OTP messages for apps targeting API 37. AIR selects Google's SMS User Consent API on API 37 and later rather than waiting for broadcasts that may be delayed by three hours. The per-message Android Allow tap remains required in this mode, followed by automatic filling and verification. The previous implementation's real Google Play services consent Allow/Deny paths were checked on the API 35 emulator; the new paused-consent/result and automatic-submission paths have browser integration coverage. The actual Android 17 OS fallback still needs device verification.
+
+The production feature is limited to HTTPS pages. Debug builds allow localhost/127.0.0.1 HTTP fixtures. The extension version is now **2.2** so GeckoView refreshes its persisted built-in scripts on upgrade. Old evidence in `artifacts/verification/sms-assist.txt` and `artifacts/screenshots/sms-auto-input.png` records the earlier consent-only, fill-only implementation. Current evidence is recorded separately in `artifacts/verification/sms-auto-login.txt`.
 
 ## Camera and screens
 
@@ -44,7 +48,7 @@ The production feature is limited to HTTPS pages. Debug builds allow localhost/1
 
 Completed sign-ins using real Google, Kakao, Naver, banking, or other service accounts have not been tested. These checks cover the engine, browser protocols, navigation policy, and callbacks to other apps; they do not establish compatibility with every service. Custom SAML or native authentication flows, apps that specifically require Chrome, unfamiliar authentication or payment frames, and device-specific passkey behavior need testing with the actual apps and devices.
 
-Carrier-delivered SMS on physical devices, manufacturer-specific behavior, and service-specific OTP forms still need testing. SMS codes received through RCS/email, embedded-frame fields, and separate one-character input boxes are outside the current feature's scope. The SMS extension's `manifest.json` version must be increased when changing its scripts so GeckoView's persisted built-in extension is refreshed on upgrade.
+Carrier-delivered SMS on physical devices, manufacturer-specific behavior, and service-specific OTP forms still need testing. SMS codes received through RCS/email and embedded-frame fields are outside the current feature's scope. Split one-character widgets are supported when the complete 4–10-character group is identifiable and empty; unsupported/custom widgets retain manual input. Installer restrictions on `RECEIVE_SMS`, SMS Retriever messages bound to other apps, and the Android 17 consent fallback need physical-device coverage. The SMS extension's `manifest.json` version must be increased when changing its scripts so GeckoView's persisted built-in extension is refreshed on upgrade.
 
 The Firebase adapter was implemented after inspecting the manifest and distributed class contracts in Google's [Firebase Auth Android SDK 25.0.0](https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-auth/25.0.0/firebase-auth-25.0.0.aar). The test receiver reproduces the activity and intent contract. It does not substitute for verification using the real Firebase SDK and server. The SDK was not added as an AIR app dependency.
 
