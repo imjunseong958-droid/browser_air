@@ -1,39 +1,39 @@
-# 검증 기록
+# Verification record
 
-2026년 10월 14일, ARM64 Android 15(API 35) Pixel 7 에뮬레이터에서 검사했습니다. 앱은 Android 10 이상을 대상으로 빌드했습니다. 실제 사용자 계정이나 개인 로그인 정보는 사용하지 않았습니다.
+Verification was performed on **14 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
-## 빌드와 설치
+## Build and installation
 
-- Gradle 빌드 및 Android Lint 완료. 오류 0개. 일부 라이브러리 업데이트·레이아웃 권고 경고는 남아 있습니다.
-- ARM64 및 x86_64 테스트 APK 생성. 로컬 테스트 키로 서명했으며 APK Signature Scheme v2 검증을 통과했습니다.
-- 운영체제의 기본 브라우저 역할에 `dev.air.browser`를 등록할 수 있음을 확인했습니다.
-- 에뮬레이터의 Chrome을 비활성화한 상태에서 독립 엔진과 로그인 복귀를 검사했습니다.
+- Gradle build and Android Lint completed with zero errors. Some dependency-update and layout recommendations remain as warnings.
+- ARM64 and x86_64 test APKs were generated. They were signed with a local debug key and passed APK Signature Scheme v2 verification.
+- `dev.air.browser` was successfully registered for Android's default browser role.
+- The independent browser engine and authentication callbacks were checked with Chrome disabled in the emulator.
 
-## 자동 검사
+## Automated checks
 
-**정책 단위 테스트 35개**: URL 파싱·도메인 위장·서브도메인과 포트·HTTPS 전환·검색 도메인·최초 리다이렉트·iframe·인증 경로 변조·OAuth 복귀 상태값·중첩 로그인·인증 시간 초과·Firebase SDK 이벤트와 복귀 형식.
+**35 policy unit tests** covered URL parsing, deceptive domains, subdomains and ports, HTTPS upgrades, search domains, initial redirects, iframes, authentication-path manipulation, OAuth callback state, nested authentication, authentication expiry, and Firebase SDK event and callback formats.
 
-**에뮬레이터 동작 테스트 7개**:
+**7 emulator integration tests** verified the following:
 
-1. 검색 링크를 받으면 엔진 세션을 시작하지 않고 차단 화면을 표시합니다.
-2. 사이트 내부 링크는 열고 다른 호스트로의 링크는 요청을 보내지 않습니다.
-3. 스크립트로 다른 사이트로 이동하려는 요청을 차단합니다.
-4. 팝업을 열고 닫아 원래 페이지로 복귀합니다.
-5. OAuth 요청의 정확한 복귀 주소·상태값을 가진 URI를 설치된 테스트 앱으로 전달합니다.
-6. Custom Tabs 서비스 연결, 세션 생성, 워밍업과 페이지 완료 콜백을 처리합니다.
-7. 설치된 앱의 인증서 지문에 고정된 Firebase SDK 액티비티에 올바른 이벤트와 암호화된 `link` 필드를 전달하고, 잘못된 이벤트는 차단합니다.
+1. A search link shows a blocked page without starting an engine session.
+2. Links within the site open, while links to another host do not send a request.
+3. Script-driven attempts to navigate to another site are blocked.
+4. A popup opens and closes, returning to its parent page.
+5. An OAuth callback with the expected address and state is delivered to an installed test app.
+6. Custom Tabs binding, session creation, warmup, and page-completion callbacks work.
+7. A Firebase SDK callback activity pinned to the installed app's certificate receives the matching event and encrypted `link` field; a wrong event is blocked.
 
-## 카메라와 화면
+## Camera and screens
 
-- 카메라 권한 후 QR 카메라 프리뷰와 조명 버튼을 확인했습니다.
-- 가상 카메라의 이미지 입력에 QR 하나를 배치하고, 앱의 카메라 디코딩 경로를 거쳐 `https://example.com/?source=air-qr`가 열리는 것을 확인했습니다.
-- 홈에는 QR 버튼만 있고, 웹 화면에는 읽기 전용 사이트 정보·뒤로·끝내기가 표시되는 것을 캡처했습니다.
-- 실제 기기의 초점·어두운 환경·카메라 권한 변경·제조사별 백그라운드 동작은 추가 검사 대상입니다.
+- The QR camera preview and torch button were checked after granting camera permission.
+- A single QR code was supplied through the emulator's camera image input. The app decoded it through its camera path and opened `https://example.com/?source=air-qr`.
+- Screenshots confirmed the QR-only home action and the web screen's read-only site information, back button, and finish button.
+- Physical-device focus, low-light behavior, camera-permission changes, and manufacturer-specific background behavior still need testing.
 
-## 검증하지 않은 항목
+## Not yet verified
 
-Google·카카오·네이버·은행 등 실제 계정과 서버의 로그인 완료는 아직 검사하지 않았습니다. 위 검사는 웹 엔진과 브라우저 프로토콜·이동 정책·앱 복귀를 검증하며, 모든 서비스의 호환성 보증을 뜻하지 않습니다. 독자 SAML/네이티브 인증 연결, Chrome을 지정하는 앱, 알려지지 않은 인증/결제 프레임, 기기별 패스키 동작은 실제 앱으로 확인해야 합니다.
+Completed sign-ins using real Google, Kakao, Naver, banking, or other service accounts have not been tested. These checks cover the engine, browser protocols, navigation policy, and callbacks to other apps; they do not establish compatibility with every service. Custom SAML or native authentication flows, apps that specifically require Chrome, unfamiliar authentication or payment frames, and device-specific passkey behavior need testing with the actual apps and devices.
 
-Firebase 어댑터의 프로토콜은 Google이 배포한 [Firebase Auth Android SDK 25.0.0](https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-auth/25.0.0/firebase-auth-25.0.0.aar)의 manifest 및 공개된 배포 클래스 계약을 확인해 작성했습니다. 테스트 수신기는 해당 액티비티·intent 계약만 재현하며 실제 Firebase SDK/서버의 로그인 검증을 대체하지 않습니다. SDK는 AIR의 앱 의존성에 추가하지 않았습니다.
+The Firebase adapter was implemented after inspecting the manifest and distributed class contracts in Google's [Firebase Auth Android SDK 25.0.0](https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-auth/25.0.0/firebase-auth-25.0.0.aar). The test receiver reproduces the activity and intent contract. It does not substitute for verification using the real Firebase SDK and server. The SDK was not added as an AIR app dependency.
 
-결과 로그와 APK 해시는 `artifacts/verification/` 및 `artifacts/SHA256SUMS`에 보관합니다.
+Logs are stored under `artifacts/verification/`. The checksums in `artifacts/SHA256SUMS` identify the local APKs used for this verification.

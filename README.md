@@ -1,51 +1,60 @@
-# AIR — 필요한 연결만
+# AIR — Only the connections you need
 
-안드로이드에서 로그인·인증·QR 같은 필요한 웹 기능은 유지하고, 주소창을 통한 습관적인 탐색과 사이트 간 이동을 줄이는 앱입니다. 구독·광고·계정·사용량 보상·추천 피드가 없습니다.
+AIR is an Android app for QR links, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: each session stays within the opened site, with bounded exceptions for authentication.
 
-## 설치
+AIR has no address bar, search entry point, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
 
-`artifacts/AIR-arm64-test.apk`는 일반적인 ARM64 안드로이드 기기용 테스트 APK입니다. Android 10 이상에서 APK를 기기로 옮겨 설치하세요. 출처별 APK 설치 허용이 필요할 수 있습니다. `AIR-x86_64-test.apk`는 x86_64 에뮬레이터용입니다.
+## Install
 
-처음 실행할 때 AIR를 기본 브라우저로 선택하면 다른 앱의 웹 링크를 받을 수 있습니다. 나중에 변경하려면 **설정 → 앱 → 기본 앱 → 브라우저 앱 → AIR**를 선택하세요. 홈의 유일한 동작 버튼은 **QR 코드 스캔**입니다.
+Download the **AIR-test-apks** artifact from a successful [Android build run](https://github.com/imjunseong958-droid/browser_air/actions/workflows/android.yml), extract it, and choose the APK for your device:
 
-GeckoView 브라우저 엔진을 포함하므로 APK 용량이 일반 WebView 앱보다 큽니다. Chrome을 설치해 두지 않아도 웹 엔진은 동작합니다. Google Play 서비스가 없는 기기에서는 일부 패스키 기능이 제한될 수 있습니다.
+- **AIR-arm64-test.apk**: most ARM64 Android devices, running **Android 10 or later**.
+- **AIR-x86_64-test.apk**: x86_64 Android emulators.
 
-## 구현한 동작
+You can also build the APKs locally; the build script writes them to `artifacts/`. APK binaries are excluded from Git. These are test builds signed with a debug key, rather than production releases.
 
-- HTTP/HTTPS 외부 링크와 카메라 QR 읽기. URL 입력, 검색창, 탭 목록, 북마크, 방문 기록 화면은 없습니다.
-- QR 단축 링크의 최초 HTTP 리다이렉트는 최대 8회까지 해결하고, 첫 페이지가 표시되면 최종 사이트에 고정합니다.
-- 같은 호스트와 `www` 별칭 안의 페이지·폼은 허용합니다. 다른 서브도메인·다른 포트·HTTPS에서 HTTP로의 전환은 별도 사이트로 취급합니다.
-- 다른 사이트로 향하는 링크, 스크립트 이동, 팝업, iframe 문서 이동에 같은 정책을 적용합니다. 이미지·스크립트·스타일 같은 외부 리소스는 정상적으로 로드됩니다.
-- Google·Bing·네이버 검색·다음 검색 등 알려진 검색 및 포털 진입점은 외부 링크와 QR에서도 차단합니다. CAPTCHA용 프레임은 제한적으로 허용합니다.
-- Android Custom Tabs 서비스: AppAuth 등 범용 로그인 클라이언트가 AIR를 브라우저 후보로 선택할 수 있습니다. 페이지 시작·완료·실패·닫기 이벤트를 돌려줍니다.
-- OAuth/OIDC의 `redirect_uri`, `client_id`, 상태값을 읽어 인증 트랜잭션을 만듭니다. 사이트 내부에서 시작한 외부 인증은 현재 사이트 또는 기존 인증 트랜잭션으로 돌아오는 주소만 허용합니다. 계정 공급자 중첩 로그인에서도 원래 앱의 복귀 주소·상태값을 보존합니다.
-- 앱 복귀는 정확한 스킴·호스트·포트·경로, 고정 쿼리, 그리고 요청에 상태값이 있는 경우 그 값까지 검사합니다. 인증 예외는 15분, 인증 출처 8개, 중첩 인증 4개로 제한합니다. 임의 `intent:` 패키지나 브라우저 대체 URL은 실행하지 않습니다.
-- Firebase Android SDK의 OAuth 및 전화 인증은 `intent:`에 담긴 암호화 데이터와 `eventId`를 사용합니다. 최초 요청의 앱 패키지·서명 인증서 지문과 설치된 SDK 복귀 액티비티를 검사하고, 이벤트가 일치할 때 해당 SDK 액티비티로 필요한 필드만 전달합니다. 반환 시에도 서명을 다시 검사합니다. Firebase SDK나 분석 기능을 AIR에 설치하지 않습니다.
-- Custom Tabs 호출 앱은 Binder UID로 확인합니다. 복귀 HTTPS 링크는 확인된 호출 앱에 전달하거나 AIR 안에서 완료합니다. 일반 브라우저로 다시 보내는 우회 버튼은 없습니다.
-- 로그인 팝업의 `window.opener` 및 `postMessage` 연결을 유지합니다. 화면에 보이는 세션은 하나이며, 팝업은 최대 두 개만 추가할 수 있습니다.
-- JavaScript 확인창·선택 폼·HTTP 인증·날짜 입력·파일 첨부·FedCM 계정 선택을 지원합니다. 파일 저장은 엔진의 인증된 응답 스트림을 사용하며 최대 100MB입니다.
-- 카메라·마이크·위치는 실제 요청이 있을 때 운영체제 권한과 사이트 권한을 확인합니다. 알림·자동 재생·추적 예외 요청은 거부합니다.
-- 상단에 현재 사이트를 읽기 전용으로 표시합니다. 누르면 전체 URL과 연결 보안을 확인할 수 있습니다. **끝내기**는 페이지와 팝업을 닫고 원래 화면으로 돌아갑니다.
+Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-## 호환성의 범위
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The only action on the home screen is **Scan QR code**. The app interface is currently in Korean.
 
-이 빌드는 **모든 실제 서비스의 로그인이 검증된 배포판이 아닙니다.** 실제 카카오·네이버·Google·은행 계정 로그인은 실기기별 검증이 필요합니다. 특정 Chrome 패키지/서명을 고정한 앱, 독자적인 SAML/인증 앱 연결, 새로운 CAPTCHA 출처, 결제 도메인, DRM, 공급자별 브라우저 정책은 추가 구현 또는 별도 테스트가 필요할 수 있습니다. 검증되지 않은 Auth Tab, TWA, Digital Asset Links 및 Custom Tabs postMessage 기능은 지원한다고 광고하지 않습니다.
+AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 
-현재 사이트 안에 있는 자체 검색, 추천, 피드까지 DOM을 분석해 삭제하지는 않습니다. 검색 도메인 차단 목록은 인터넷의 모든 검색·프록시 사이트를 포괄하지 않습니다. 다른 앱에서 새로운 링크를 누르면 새로운 목적 세션을 만들 수 있습니다. AIR는 사용자의 의도적인 링크 연결을 제한하는 브라우저이며, 기기 전체의 다른 앱 사용을 잠그는 도구는 아닙니다.
+## What it does
 
-HTTP 식당 메뉴 등과의 호환성을 위해 HTTP는 지원하지만, 연결 정보에 암호화되지 않았음을 표시합니다. 잘못된 TLS 인증서를 우회하지 않습니다.
+- Opens external HTTP/HTTPS links and scans QR codes with the camera.
+- Resolves up to eight initial HTTP redirects, including shortened QR links, then pins the session to the final site once the first document is displayed.
+- Allows pages and forms on the same host and its `www` alias. Other subdomains, other ports, and HTTPS-to-HTTP transitions are treated as a different site.
+- Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load.
+- Blocks known search and portal entry points, including Google, Bing, Naver Search, and Daum Search, even when opened through an external link or QR code. CAPTCHA frames receive limited exceptions.
+- Provides an Android Custom Tabs service so clients such as AppAuth can select AIR for authentication. It reports page-start, completion, failure, and close events to the calling app.
+- Tracks OAuth/OIDC requests using `redirect_uri`, `client_id`, and state values. External authentication started within a site must return to that site or an existing authentication transaction. Nested identity-provider flows preserve the original app callback and state.
+- Checks callback schemes, hosts, ports, paths, fixed query parameters, and the state value when supplied. Authentication exceptions are bounded to 15 minutes, eight authentication origins, and four nested transactions. Arbitrary `intent:` packages and browser fallback URLs are not executed.
+- Handles Firebase Android SDK callbacks for OAuth and phone-auth verification. It checks the requested app package, installed signing-certificate fingerprint, SDK callback activity, and `eventId`, then forwards only the required callback fields. The installed signature is checked again on return. AIR does not bundle the Firebase SDK or Firebase analytics.
+- Identifies Custom Tabs callers through their Binder UID. HTTPS callbacks are delivered to the verified calling app or completed inside AIR. There is no button to hand a blocked page to another browser.
+- Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions.
+- Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream and are limited to 100 MB.
+- Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Notification, autoplay, and tracking-exception requests are denied.
+- Displays the current site in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
 
-## 개인정보
+## Compatibility and limits
 
-AIR 자체에 분석 SDK, 광고 SDK, 서버, 계정, URL/인증 코드 로그를 추가하지 않았습니다. 세션 목록과 이동 정책은 메모리에만 있습니다. 로그인 유지에 필요한 쿠키와 사이트 저장소는 기기 내 Gecko 프로필에 보관됩니다. 앱 데이터 삭제 또는 앱 삭제로 지울 수 있습니다. 클라우드 백업과 기기 간 데이터 이전은 비활성화했습니다.
+**Real-service login compatibility has not been verified across all providers.** Google, Kakao, Naver, and banking apps still need testing with real accounts on physical devices. Apps that require a specific Chrome package or signature, custom SAML or native authentication flows, unfamiliar CAPTCHA or payment domains, DRM, and provider-specific browser policies may need additional implementation or testing. AIR does not advertise unverified support for Auth Tab, Trusted Web Activities, Digital Asset Links, or Custom Tabs postMessage.
 
-방문한 웹사이트와 브라우저 엔진은 정상 동작에 필요한 네트워크 통신을 합니다. 앱을 닫는다고 쿠키까지 매번 지우지는 않습니다. 비밀번호 저장 기능은 비활성화했지만 운영체제의 입력·패스키 지원과 웹 로그인 쿠키는 사용할 수 있습니다.
+AIR does not inspect and remove a site's own search, recommendations, or feeds from its DOM. Its search-domain blocklist cannot cover every search or proxy site. Opening a new link from another app can start a new session. The navigation limits apply within AIR; other apps on the device remain usable.
 
-## 개발
+HTTP links are supported for uses such as restaurant menus, with an unencrypted-connection notice in the site information. Invalid TLS certificates cannot be bypassed.
 
-네이티브 **Java 17 + Android Views + GeckoView** 프로젝트입니다. Rust/JNI는 사용하지 않습니다. Rust로 네이티브 모듈을 추가할 수 있으나, 현재 기능의 성능은 주로 Gecko 엔진이 담당합니다.
+## Privacy
 
-| 구성 | 버전 |
+AIR has no app-owned analytics SDK, advertising SDK, server, or account system, and does not add URL or authentication-code logging. Session lists and navigation policies live in memory. Cookies and site storage needed for sign-in are kept in the device's Gecko profile and can be removed by clearing app data or uninstalling AIR. Cloud backup and device-to-device data transfer are disabled.
+
+Websites and the browser engine make network requests needed for normal operation. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
+
+## Development
+
+The application uses **Java 17**, **Android Views**, and **GeckoView**. GeckoView handles web rendering and execution.
+
+| Component | Version |
 |---|---|
 | Android Gradle Plugin | 9.4.1 |
 | Gradle | 9.6.0 |
@@ -55,23 +64,27 @@ AIR 자체에 분석 SDK, 광고 SDK, 서버, 계정, URL/인증 코드 로그�
 | AndroidX Browser | 1.10.0 |
 | ZXing Android Embedded | 4.3.0 |
 
-Android Studio에서 이 폴더를 열거나 JDK 17과 Android SDK를 준비한 뒤 실행합니다.
+Open this folder in Android Studio, or install JDK 17 and the Android SDK, then run:
 
 ```sh
 bash scripts/build.sh
 ```
 
-`ANDROID_HOME` 또는 `local.properties`의 `sdk.dir`로 SDK를 지정합니다. 빌드 스크립트는 로컬 `.tools` 런타임이 있으면 사용할 수 있으며, 로컬 테스트 서명키를 생성합니다. 테스트 키는 정식 배포용 키가 아닙니다. 엔진은 보안 업데이트가 필요한 의존성입니다. 새 버전으로 갱신할 때 인증·이동 정책과 기기 테스트를 다시 실행하세요.
+Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK location. The script can use local runtimes under `.tools/` when available and generates a local debug signing key. That key is for testing. Keep the browser engine updated for security, and rerun authentication, navigation-policy, and device checks when changing engine versions.
 
-`navigation/`은 안드로이드와 독립된 URL·인증·사이트 이동 정책 및 단위 테스트입니다. `app/`은 화면·QR·엔진·Custom Tabs·앱 복귀를 담당합니다. `.github/workflows/android.yml`은 빌드·정적 검사·정책 테스트를 실행하고 테스트 APK를 산출합니다.
+- `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
+- `app/`: native screens, QR scanning, browser sessions, Custom Tabs, and callbacks to other apps.
+- `.github/workflows/android.yml`: builds the app, runs Android Lint and policy tests, and uploads test APKs.
+
+After building with the script above, connect an Android device or start an emulator to run the instrumented tests:
 
 ```sh
 ./gradlew :navigation:test :app:lintDebug :app:assembleDebugAndroidTest
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-실제 계정 없이 로컬 HTTP 서버와 테스트용 인증 복귀 앱으로 외부 사이트 차단, 사이트 내부 탐색, 스크립트 이동, 팝업, Custom Tabs, OAuth 앱 복귀, Firebase의 인증서·이벤트·암호화 필드 전달을 검사합니다. 가상 카메라에 QR 이미지를 넣어 웹 링크가 열리는 것도 검사했습니다. 검사 결과는 [검증 기록](docs/verification.md)에 적습니다.
+Verification uses a local HTTP server and test callback receivers without real accounts. It covers external-site blocking, navigation within a site, script redirects, popups, Custom Tabs, OAuth callbacks, and Firebase certificate, event, and encrypted-field handling. QR decoding was also checked with an image supplied to the emulator camera. See the [verification record](docs/verification.md) for results and remaining checks.
 
-## 의존성 출처
+## Third-party components
 
-GeckoView는 Mozilla Public License 2.0, AndroidX와 ZXing은 Apache License 2.0 기반입니다. 변경하지 않은 GeckoView 엔진을 Maven에서 사용합니다. 출처와 원본 소스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)에 기록했습니다.
+GeckoView is distributed under the Mozilla Public License 2.0, and AndroidX and ZXing use Apache License 2.0. AIR consumes an unmodified GeckoView engine from Maven. Component notices and original-source references are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
