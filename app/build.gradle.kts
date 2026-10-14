@@ -60,7 +60,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    buildFeatures { viewBinding = true }
+    buildFeatures { viewBinding = true; buildConfig = true }
     lint { abortOnError = true }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
@@ -73,6 +73,8 @@ dependencies {
     implementation("androidx.browser:browser:1.10.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("org.mozilla.geckoview:geckoview:158.0.20261007201254")
+    implementation("com.google.android.gms:play-services-auth-api-phone:18.3.1")
+    testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

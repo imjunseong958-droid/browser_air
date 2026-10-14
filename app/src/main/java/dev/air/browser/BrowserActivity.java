@@ -40,9 +40,11 @@ public final class BrowserActivity extends AppCompatActivity {
     private BrowserDownloads downloads;
     private BrowserPermissions permissions;
     private FirebaseAuthBridge firebaseAuth;
+    private BrowserSmsAssist smsAssist;
     private final List<GeckoSession> sessions = new ArrayList<>();
     private final Map<GeckoSession, String> locations = new IdentityHashMap<>();
     private final Map<GeckoSession, Boolean> backStates = new IdentityHashMap<>();
+    private final Map<GeckoSession, Boolean> securityStates = new IdentityHashMap<>();
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -52,6 +54,7 @@ public final class BrowserActivity extends AppCompatActivity {
         prompts = new BrowserPrompts(this);
         downloads = new BrowserDownloads(this);
         permissions = new BrowserPermissions(this);
+        smsAssist = new BrowserSmsAssist(this, ui.smsAssistButton);
         ui.finishButton.setOnClickListener(view -> finish());
         ui.backButton.setOnClickListener(view -> navigateBack());
         ui.retryButton.setOnClickListener(view -> startSession());
@@ -88,7 +91,12 @@ public final class BrowserActivity extends AppCompatActivity {
         sessions.add(session);
         session.open(((AirApplication) getApplication()).runtime());
         ui.geckoView.setSession(session);
-        session.loadUri(entryUrl);
+        ((AirApplication) getApplication()).smsExtension().accept(
+                ignored -> loadEntry(session), ignored -> loadEntry(session));
+    }
+
+    private void loadEntry(GeckoSession session) {
+        if (!isFinishing() && !shuttingDown && sessions.contains(session) && session.isOpen()) session.loadUri(entryUrl);
     }
 
     private GeckoSession createSession() {
@@ -115,6 +123,7 @@ public final class BrowserActivity extends AppCompatActivity {
             }
         });
         session.setPermissionDelegate(permissions);
+        smsAssist.attach(session);
         return session;
     }
 
@@ -152,9 +161,10 @@ public final class BrowserActivity extends AppCompatActivity {
             locations.put(source, url);
             if (source == active()) {
                 currentUrl = url;
-                secure = null;
+                secure = securityStates.get(source);
                 updateSiteLabel(url);
             }
+            smsAssist.locationChanged(source, url);
         }
 
         @Override public void onCanGoBack(@NonNull GeckoSession source, boolean available) {
@@ -175,6 +185,7 @@ public final class BrowserActivity extends AppCompatActivity {
             ui.root.post(() -> {
                 if (!shuttingDown && sessions.contains(child) && child.isOpen()) {
                     ui.geckoView.setSession(child);
+                    smsAssist.visibleSessionChanged();
                     child.setActive(true);
                     canGoBack = false;
                 }
@@ -193,9 +204,12 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private final class ProgressDelegate implements GeckoSession.ProgressDelegate {
         @Override public void onPageStart(@NonNull GeckoSession source, @NonNull String uri) {
+            smsAssist.pageStarted(source);
+            securityStates.remove(source);
             if (!sessions.contains(source)) return;
             locations.put(source, uri);
             if (source == active()) {
+                secure = null;
                 if (ui.geckoView.getSession() != source) {
                     ui.geckoView.setSession(source);
                     source.setActive(true);
@@ -215,7 +229,9 @@ public final class BrowserActivity extends AppCompatActivity {
             notifyClient(success ? CustomTabsCallback.NAVIGATION_FINISHED : CustomTabsCallback.NAVIGATION_FAILED);
         }
         @Override public void onSecurityChange(@NonNull GeckoSession source, @NonNull SecurityInformation info) {
-            if (source == active()) secure = info.isSecure && !info.isException;
+            securityStates.put(source, info.isSecure && !info.isException);
+            if (source == active()) secure = securityStates.get(source);
+            smsAssist.refresh();
         }
     }
 
@@ -264,19 +280,23 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     private void closePopup(GeckoSession session) {
+        smsAssist.visibleSessionChanged();
+        if (session != null) smsAssist.detach(session);
         if (session == null || sessions.size() <= 1) { finish(); return; }
         boolean visible = session == active();
         sessions.remove(session);
         locations.remove(session);
         backStates.remove(session);
+        securityStates.remove(session);
         if (session.isOpen()) session.close();
         if (visible && active() != null) {
             ui.geckoView.setSession(active());
             active().setActive(true);
             currentUrl = locations.get(active());
             canGoBack = backStates.getOrDefault(active(), false);
-            secure = null;
+            secure = securityStates.get(active());
             updateSiteLabel(currentUrl);
+            smsAssist.refresh();
         }
     }
 
@@ -302,6 +322,17 @@ public final class BrowserActivity extends AppCompatActivity {
 
     boolean isAuthenticating() { return (policy != null && policy.isAuthenticating()) || (firebaseAuth != null && firebaseAuth.isActive()); }
 
+    GeckoSession smsSession() { return shuttingDown ? null : active(); }
+    String smsPageUrl() { return currentUrl; }
+    boolean smsPageAllowed() {
+        WebAddress address = WebAddress.parse(currentUrl);
+        return !shuttingDown && ui.errorPanel.getVisibility() != View.VISIBLE
+                && ui.geckoView.getSession() == active() && address != null
+                && ((address.scheme().equals("https") && Boolean.TRUE.equals(secure))
+                    || (BuildConfig.DEBUG && address.scheme().equals("http")
+                        && (address.host().equals("localhost") || address.host().equals("127.0.0.1"))));
+    }
+
     private void showBlocked(NavigationPolicy.Decision decision) {
         int title = decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked
                 : decision == NavigationPolicy.Decision.BLOCK_EXPIRED ? R.string.auth_expired : R.string.navigation_blocked;
@@ -315,6 +346,7 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     private void showError(int title, int body, boolean retry) {
+        smsAssist.visibleSessionChanged();
         ui.errorTitle.setText(title);
         ui.errorBody.setText(body);
         ui.retryButton.setVisibility(retry ? View.VISIBLE : View.GONE);
@@ -327,18 +359,23 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     private void closeSessions() {
+        smsAssist.visibleSessionChanged();
         shuttingDown = true;
         ui.geckoView.releaseSession();
-        for (GeckoSession session : sessions) if (session.isOpen()) session.close();
-        sessions.clear(); locations.clear(); backStates.clear();
+        for (GeckoSession session : sessions) {
+            smsAssist.detach(session);
+            if (session.isOpen()) session.close();
+        }
+        sessions.clear(); locations.clear(); backStates.clear(); securityStates.clear();
     }
 
-    @Override protected void onPause() { if (active() != null) active().setActive(false); super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if (active() != null) active().setActive(true); }
+    @Override protected void onPause() { smsAssist.pause(); if (active() != null) active().setActive(false); super.onPause(); }
+    @Override protected void onResume() { super.onResume(); if (active() != null) active().setActive(true); smsAssist.resume(); }
     @Override protected void onDestroy() {
         prompts.cancelPending();
         downloads.destroy();
         permissions.destroy();
+        smsAssist.destroy();
         closeSessions();
         notifyClient(CustomTabsCallback.TAB_HIDDEN);
         super.onDestroy();

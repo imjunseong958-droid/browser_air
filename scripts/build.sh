@@ -37,7 +37,7 @@ elif [[ ! -f "$task_root/.tools/debug.keystore" ]]; then
     -dname 'CN=Android Debug,O=Android,C=US' -keyalg RSA -keysize 2048 -validity 10000
 fi
 if [[ "$task_variant" == debug ]]; then task_gradle_variant=Debug; else task_gradle_variant=Release; fi
-./gradlew :navigation:test :updates:test ":app:lint$task_gradle_variant" ":app:assemble$task_gradle_variant" --console=plain "$@"
+./gradlew :navigation:test :updates:test ":app:test${task_gradle_variant}UnitTest" ":app:lint$task_gradle_variant" ":app:assemble$task_gradle_variant" --console=plain "$@"
 task_apk="app/build/outputs/apk/$task_variant/app-$task_variant.apk"
 task_abis="$(unzip -Z -1 "$task_apk" | awk -F/ '$1 == "lib" && NF == 3 && $3 ~ /\.so$/ { print $2 }' | sort -u)"
 if [[ "$task_abis" != arm64-v8a ]]; then
