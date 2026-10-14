@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Parses only the message explicitly shared by Android; never reads an SMS inbox. */
+/** Parses a newly received message locally; never reads an SMS inbox. */
 final class SmsCodeParser {
     private static final String CODE = "(?<![A-Za-z0-9])([A-Za-z0-9]{4,10})(?![A-Za-z0-9])";
     private static final String MARKER = "(?:인증\\s*(?:번호|코드)|확인\\s*(?:번호|코드)|"

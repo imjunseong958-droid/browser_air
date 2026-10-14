@@ -30,7 +30,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.security.MessageDigest;
-import com.google.android.gms.auth.api.phone.SmsRetriever;
+import android.Manifest;
+import android.provider.Telephony;
+import androidx.test.rule.GrantPermissionRule;
+import org.junit.Rule;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -39,12 +42,15 @@ import org.mozilla.geckoview.GeckoView;
 
 @RunWith(AndroidJUnit4.class)
 public final class BrowserIntegrationTest {
+    @Rule public GrantPermissionRule smsPermission = GrantPermissionRule.grant(Manifest.permission.RECEIVE_SMS);
     private FixtureServer server;
     private UiDevice device;
     private ActivityScenario<BrowserActivity> scenario;
 
     @Before public void setup() throws Exception {
         device = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation());
+        InstrumentationRegistry.getInstrumentation().getTargetContext()
+                .getSharedPreferences("sms_assist", Context.MODE_PRIVATE).edit().clear().commit();
         server = new FixtureServer();
     }
     @After public void cleanup() throws Exception {
@@ -186,20 +192,6 @@ public final class BrowserIntegrationTest {
         } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
     }
 
-    private void fakeSmsSource() {
-        scenario.onActivity(activity -> {
-            BrowserSmsAssist assist = (BrowserSmsAssist) member(activity, "smsAssist");
-            try {
-                var field = BrowserSmsAssist.class.getDeclaredField("source");
-                field.setAccessible(true);
-                field.set(assist, new BrowserSmsAssist.Source() {
-                    @Override public boolean available(Context context) { return true; }
-                    @Override public void start(Context context, Runnable success, Runnable failure) { success.run(); }
-                });
-            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
-    }
-
     private void awaitSmsButton() {
         long end = SystemClock.elapsedRealtime() + 20_000;
         while (SystemClock.elapsedRealtime() < end) {
@@ -219,124 +211,230 @@ public final class BrowserIntegrationTest {
 
     private Object startSms() {
         awaitSmsButton();
-        text("문자 인증번호 자동 입력").click();
-        text("문자 기다리는 중 · 취소");
+        text("문자 자동 로그인 켜기").click();
+        text("인증 문자 기다리는 중 · 끄기");
         Object request = pendingSms();
         assertNotNull(request);
         return request;
     }
 
-    /** Fake only Android's successful consent result, then use the real Gecko content bridge. */
-    private void consentSms(Object request, String message) {
+    /** Inject only the new SMS body; all document checks, filling and submission use the real engine. */
+    private void receiveSms(Object request, String message) {
         scenario.onActivity(activity -> {
-            Object assist = member(activity, "smsAssist");
             try {
-                var phase = request.getClass().getDeclaredField("phase");
-                phase.setAccessible(true);
-                for (Object value : phase.getType().getEnumConstants()) {
-                    if (value.toString().equals("CONSENT")) phase.set(request, value);
-                }
                 var accept = BrowserSmsAssist.class.getDeclaredMethod("acceptMessage", request.getClass(), String.class);
                 accept.setAccessible(true);
-                accept.invoke(assist, request, message);
+                accept.invoke(member(activity, "smsAssist"), request, message);
             } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
         });
     }
 
-    @Test public void smsIsOptInAndFillsStandardFieldWithoutSubmitting() {
+    private Object awaitPendingSms() {
+        long end = SystemClock.elapsedRealtime() + 20_000;
+        while (SystemClock.elapsedRealtime() < end) {
+            Object request = pendingSms();
+            if (request != null && member(request, "phase").toString().equals("WAITING")) return request;
+            SystemClock.sleep(100);
+        }
+        throw new AssertionError("SMS did not automatically start waiting");
+    }
+
+    @Test public void smsWaitsOnlyOnRecognizedVerificationScreens() {
+        open(server.url("/"));
+        text("FIXTURE_HOME");
+        awaitSmsButton();
+        text("문자 자동 로그인 켜기").click();
+        assertNull(pendingSms());
+        scenario.onActivity(activity -> ((GeckoView) activity.findViewById(R.id.geckoView)).getSession()
+                .loadUri(server.url("/sms")));
+        text("SMS_FIXTURE");
+        receiveSms(awaitPendingSms(), "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+    }
+
+    @Test public void smsNeedsInitialOptInThenFillsAndSubmitsWithoutMoreClicks() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
         awaitSmsButton();
         assertNull(pendingSms());
-        fakeSmsSource();
-        consentSms(startSms(), "[AIR] 인증번호 001234");
-        text("OTP_VALUE_001234");
-        assertFalse(device.hasObject(By.text("OTP_SUBMITTED")));
+        receiveSms(startSms(), "[AIR] 인증번호 001234");
+        text("OTP_SUBMITTED_001234");
         assertNull(pendingSms());
     }
 
-    @Test public void smsUnmarkedFieldRequiresUserChoice() {
+    @Test public void smsLabelledFieldIsChosenAutomaticallyWithoutTouchingPhone() {
         open(server.url("/sms-choice"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
-        consentSms(startSms(), "인증번호 123456");
-        text("인증번호 입력칸을 선택해 주세요");
-        text("2. 인증번호").click();
-        text("OTP_VALUE_123456");
+        receiveSms(startSms(), "인증번호 123456");
+        text("OTP_SUBMITTED_123456");
         assertFalse(device.hasObject(By.text("PHONE_CHANGED")));
+        assertFalse(device.hasObject(By.text("인증번호 입력칸을 선택해 주세요")));
     }
 
-    @Test public void smsAmbiguousCodesRequireUserChoice() {
+    @Test public void smsSingleUnlabelledCodeDoesNotNeedCodeSelection() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
-        consentSms(startSms(), "인증번호 123456 / 확인코드 654321");
+        receiveSms(startSms(), "[AIR] 001234");
+        text("OTP_SUBMITTED_001234");
+    }
+
+    @Test public void smsAmbiguousCodesStillRequireUserChoice() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 123456 / 확인코드 654321");
         text("입력할 인증번호를 선택해 주세요");
         text("654321").click();
-        text("OTP_VALUE_654321");
+        text("OTP_SUBMITTED_654321");
     }
 
-    @Test public void smsNavigationRejectsOldConsentEvenWhenAnotherRequestIsWaiting() {
+    @Test public void smsNavigationStartsNewWaitAndRejectsPreviousMessage() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
         Object old = startSms();
         scenario.onActivity(activity -> ((GeckoView) activity.findViewById(R.id.geckoView)).getSession()
                 .loadUri(server.url("/sms?second")));
         awaitUrl("/sms?second");
-        awaitSmsButton();
-        Object next = startSms();
-        consentSms(old, "인증번호 123456");
+        Object next = awaitPendingSms();
+        assertNotSame(old, next);
+        receiveSms(old, "인증번호 123456");
         assertSame(next, pendingSms());
         text("OTP_WAITING");
-        assertFalse(device.hasObject(By.text("OTP_VALUE_123456")));
+        receiveSms(next, "인증번호 654321");
+        text("OTP_SUBMITTED_654321");
     }
 
-    @Test public void smsCancelAndBackgroundingDiscardTheRequest() {
+    @Test public void smsDisablePersistsAndDoesNotAutoRestart() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
         Object old = startSms();
-        text("문자 기다리는 중 · 취소").click();
+        text("인증 문자 기다리는 중 · 끄기").click();
         assertNull(pendingSms());
-        consentSms(old, "인증번호 123456");
+        receiveSms(old, "인증번호 123456");
         text("OTP_WAITING");
-        startSms();
-        scenario.moveToState(Lifecycle.State.CREATED);
-        scenario.moveToState(Lifecycle.State.RESUMED);
-        assertNull(pendingSms());
-    }
-
-    @Test public void smsWrongDomainCodeDoesNotEnterThePage() {
+        scenario.close();
         open(server.url("/sms"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
-        consentSms(startSms(), "인증번호 123456\n@other.example #123456");
+        awaitSmsButton();
         assertNull(pendingSms());
-        text("OTP_WAITING");
-        assertFalse(device.hasObject(By.text("OTP_VALUE_123456")));
     }
 
-    @Test public void smsUnsupportedSplitFieldsUseManualFallback() {
+    @Test public void smsBackgroundingDiscardsOldMessageAndResumeAutomaticallyRearms() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        Object old = startSms();
+        scenario.moveToState(Lifecycle.State.CREATED);
+        assertNull(pendingSms());
+        scenario.moveToState(Lifecycle.State.RESUMED);
+        Object next = awaitPendingSms();
+        assertNotSame(old, next);
+        receiveSms(old, "인증번호 123456");
+        text("OTP_WAITING");
+        receiveSms(next, "인증번호 654321");
+        text("OTP_SUBMITTED_654321");
+    }
+
+    @Test public void smsUnrelatedAndWrongDomainMessagesKeepWaitingForTheRightCode() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        receiveSms(request, "인증번호 123456\n@other.example #123456");
+        receiveSms(request, "광고: 오늘 행사 안내");
+        assertSame(request, pendingSms());
+        text("OTP_WAITING");
+        receiveSms(request, "인증번호 654321");
+        text("OTP_SUBMITTED_654321");
+    }
+
+    @Test public void smsSplitFieldsFillAndSubmitAutomatically() {
         open(server.url("/sms-split"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
-        consentSms(startSms(), "인증번호 123456");
-        text("인증번호를 직접 입력해 주세요");
-        assertNotNull(device.findObject(By.textContains("인증번호: 123456")));
+        receiveSms(startSms(), "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
         assertNull(pendingSms());
     }
 
     @Test public void smsMalformedBroadcastDoesNotInterruptWaiting() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
-        fakeSmsSource();
         Object request = startSms();
-        Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
-        app.sendBroadcast(new Intent(SmsRetriever.SMS_RETRIEVED_ACTION));
-        device.waitForIdle();
+        scenario.onActivity(activity -> {
+            BroadcastReceiverForTest.receive(member(activity, "smsAssist"), activity,
+                    new Intent(Telephony.Sms.Intents.SMS_RECEIVED_ACTION));
+        });
         assertSame(request, pendingSms());
         assertEquals("WAITING", member(request, "phase").toString());
+        assertNull(BrowserSmsAssist.receivedText(new Intent("unrelated.action")));
+    }
+
+    @Test public void smsEnabledSettingAutomaticallyAppliesAfterReopeningBrowser() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        startSms();
+        scenario.close();
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        receiveSms(awaitPendingSms(), "인증번호 123456");
+        text("OTP_SUBMITTED_123456");
+    }
+
+    @Test public void smsConsentResultWhilePausedAutomaticallyCompletesOnResume() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        scenario.onActivity(activity -> {
+            try {
+                var phase = request.getClass().getDeclaredField("phase");
+                phase.setAccessible(true);
+                for (Object value : phase.getType().getEnumConstants()) {
+                    if (value.toString().equals("CONSENT")) phase.set(request, value);
+                }
+                var consent = BrowserSmsAssist.class.getDeclaredField("consentRequest");
+                consent.setAccessible(true);
+                consent.set(member(activity, "smsAssist"), request);
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
+        scenario.moveToState(Lifecycle.State.CREATED);
+        assertSame(request, pendingSms());
+        scenario.onActivity(activity -> {
+            try {
+                var consent = BrowserSmsAssist.class.getDeclaredField("consentRequest");
+                consent.setAccessible(true);
+                consent.set(member(activity, "smsAssist"), null);
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
+        receiveSms(request, "인증번호 001234");
+        assertEquals("CODES", member(request, "phase").toString());
+        scenario.moveToState(Lifecycle.State.RESUMED);
+        text("OTP_SUBMITTED_001234");
+        assertNull(pendingSms());
+    }
+
+    @Test public void smsMismatchedConsentMessageEndsTheOneMessageRequest() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        scenario.onActivity(activity -> {
+            try {
+                var phase = request.getClass().getDeclaredField("phase");
+                phase.setAccessible(true);
+                for (Object value : phase.getType().getEnumConstants()) {
+                    if (value.toString().equals("CONSENT")) phase.set(request, value);
+                }
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
+        receiveSms(request, "인증번호 123456\n@other.example #123456");
+        assertNull(pendingSms());
+        text("OTP_WAITING");
+    }
+
+    private static class BroadcastReceiverForTest {
+        static void receive(Object assist, Context context, Intent intent) {
+            try {
+                var field = BrowserSmsAssist.class.getDeclaredField("receiver");
+                field.setAccessible(true);
+                ((android.content.BroadcastReceiver) field.get(assist)).onReceive(context, intent);
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        }
     }
 
     /** Real HTTP fixture on the emulator; changing localhost to 127.0.0.1 is a cross-site escape. */
@@ -368,7 +466,7 @@ public final class BrowserIntegrationTest {
                     String other = "http://127.0.0.1:" + socket.getLocalPort() + "/outside";
                     String content;
                     if (route.startsWith("/sms")) {
-                        String fields = route.equals("/sms-split") ? "<input maxlength='1'><input maxlength='1'>"
+                        String fields = route.equals("/sms-split") ? "<div aria-label='인증번호'><input maxlength='1' autocomplete='one-time-code'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'></div>"
                                 : (route.equals("/sms-choice") ? "<label for='phone'>전화번호</label><input type='tel' id='phone'>" : "")
                                     + "<label for='otp'>인증번호</label><input id='otp' "
                                     + (route.equals("/sms-choice") ? "inputmode='numeric'" : "autocomplete='one-time-code'") + ">";
@@ -376,7 +474,7 @@ public final class BrowserIntegrationTest {
                                 + "<p id='status'>OTP_WAITING</p><p id='phone-status'></p><script>"
                                 + "document.getElementById('otp')?.addEventListener('input',e=>document.getElementById('status').textContent='OTP_VALUE_'+e.target.value);"
                                 + "document.getElementById('phone')?.addEventListener('input',()=>document.getElementById('phone-status').textContent='PHONE_CHANGED');"
-                                + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED'});"
+                                + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED_'+[...document.querySelectorAll('#verify input:not(#phone)')].map(i=>i.value).join('')});"
                                 + "</script>";
                     }
                     else if (route.equals("/inside")) content = "<h1>INSIDE_PAGE</h1><a href='" + other + "'>OTHER_SITE_LINK</a>";
