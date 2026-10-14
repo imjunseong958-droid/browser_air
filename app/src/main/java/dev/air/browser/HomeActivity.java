@@ -14,6 +14,7 @@ import dev.air.browser.databinding.ActivityHomeBinding;
 public final class HomeActivity extends AppCompatActivity {
     private ActivityResultLauncher<Intent> roleLauncher;
     private ActivityHomeBinding ui;
+    private HomeUpdates updates;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -22,6 +23,7 @@ public final class HomeActivity extends AppCompatActivity {
         setContentView(ui.getRoot());
         AirInsets.apply(this, ui.root);
         ui.scanButton.setOnClickListener(view -> startActivity(new Intent(this, ScanActivity.class)));
+        updates = new HomeUpdates(this, ui.updateButton);
         if (state == null && !getPreferences(MODE_PRIVATE).getBoolean("setup_seen", false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("setup_seen", true).apply();
             ui.root.post(this::showSetup);
@@ -33,6 +35,7 @@ public final class HomeActivity extends AppCompatActivity {
         RoleManager roles = getSystemService(RoleManager.class);
         ui.linkHint.setText(roles != null && roles.isRoleHeld(RoleManager.ROLE_BROWSER)
                 ? R.string.home_hint : R.string.home_hint_not_default);
+        updates.resume();
     }
 
     private void showSetup() {

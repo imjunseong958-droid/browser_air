@@ -61,4 +61,23 @@
     <string name="download_saved">파일을 저장했어요.</string>
     <string name="download_failed">파일을 저장하지 못했어요. 네트워크와 저장 공간을 확인하세요. 최대 100MB까지 저장할 수 있어요.</string>
     <string name="auth_expired">인증 연결 시간이 지났어요. 원래 앱에서 로그인을 다시 시작하세요.</string>
+    <string name="update_check">업데이트 확인</string>
+    <string name="update_checking">새 버전을 확인하고 있어요…</string>
+    <string name="update_available">AIR %1$s 업데이트</string>
+    <string name="update_title">새로운 AIR가 있어요</string>
+    <string name="update_body">AIR %1$s로 업데이트할까요?\n\n약 %2$dMB를 다운로드합니다. 설치는 Android 확인 화면에서 승인해 주세요. 기존 설정과 로그인 정보는 유지됩니다.</string>
+    <string name="update_download">다운로드 및 업데이트</string>
+    <string name="update_progress">다운로드 중 %1$d%%</string>
+    <string name="update_found">새 버전이 있어요. 업데이트 버튼을 눌러 주세요.</string>
+    <string name="update_latest">최신 버전을 사용하고 있어요.</string>
+    <string name="update_not_published">아직 공개된 업데이트가 없어요.</string>
+    <string name="update_unsupported">이 업데이트는 더 새로운 Android 버전이 필요해요.</string>
+    <string name="update_check_failed">새 버전을 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.</string>
+    <string name="update_download_failed">업데이트를 받지 못했어요. 연결과 저장 공간을 확인하고 다시 시도해 주세요.</string>
+    <string name="update_verify_failed">업데이트 파일을 확인할 수 없어 설치하지 않았어요. 다시 시도해 주세요.</string>
+    <string name="update_permission_title">AIR 업데이트 설치 허용</string>
+    <string name="update_permission_body">설정에서 AIR의 ‘이 출처의 앱 설치 허용’을 켜 주세요. 돌아오면 다운로드한 업데이트 설치를 계속합니다.</string>
+    <string name="update_permission_action">설치 권한 설정</string>
+    <string name="update_permission_needed">업데이트하려면 AIR의 앱 설치 권한을 허용해 주세요.</string>
+    <string name="update_installer_unavailable">설치 화면을 열지 못했어요. 기기의 앱 설치 설정을 확인해 주세요.</string>
 </resources>

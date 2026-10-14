@@ -11,3 +11,4 @@ artifacts/*.apk
 artifacts/*.aab
 artifacts/debug/
 artifacts/release/
+__pycache__/

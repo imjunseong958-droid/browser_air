@@ -6,7 +6,7 @@ AIR has no address bar, search entry point, tab list, bookmarks, or browsing-his
 
 ## Install
 
-Download the **AIR** artifact from a successful **main-branch** [Android build run](https://github.com/imjunseong958-droid/browser_air/actions/workflows/android.yml), extract it, and install **AIR.apk**. The archive also includes `SHA256SUMS` for verifying the download.
+Download **AIR.apk** from the [latest AIR release](https://github.com/imjunseong958-droid/browser_air/releases/latest) and install it. Releases also include `SHA256SUMS` for verifying the download and `update.json` for the app's update checker. No GitHub sign-in is needed to download public release assets.
 
 AIR supports **ARM64 (`arm64-v8a`) devices running Android 10 or later**. It no longer distributes x86_64 or 32-bit ARM APKs; use an ARM64 emulator for development.
 
@@ -14,17 +14,25 @@ Distributed APKs use a fixed release signing key and keep the application ID `de
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The only action on the home screen is **Scan QR code**. The app interface is currently in Korean.
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Scan QR code** is the primary home action; a small **Check for updates** button sits below the footer. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 
 ## Updates
 
-Download and install the newer `AIR.apk` over the installed release. Do not uninstall AIR first: Android preserves app data, including settings and the Gecko profile containing cookies and site storage, when the package name and signing certificate match. CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. The user-visible version is maintained as `airVersionName` in `gradle.properties`.
+AIR release builds quietly check GitHub Releases when the home screen opens, at most once per 24 hours. The footer button changes to **Update AIR [version]** when a newer compatible release is available. Tap it to confirm the download, see its progress, and open Android's installation confirmation. You can also tap **Check for updates** to check immediately. Automatic checks do not show popups or download APKs.
+
+On the first in-app update, Android may require enabling **Allow from this source** for AIR. Return to AIR to continue installing the verified download. Android still asks you to approve installation. Closing the installation screen leaves the download available for retry. Network failures do not block QR scanning or browsing, and a completed download can be retried without downloading it again. Network work survives screen rotation and stops when the home screen is finished; interrupted downloads are not offered for installation.
+
+Updates preserve app data, including settings and the Gecko profile containing cookies and site storage, when the package name and signing certificate match. AIR verifies the downloaded file's size, SHA-256, application ID, version, minimum Android version, ARM64 libraries, and installed signing certificate before offering it to Android. Downloads use HTTPS and are limited to this repository's release URLs and GitHub's release-asset hosts. The updater has no GitHub token and never exposes browser storage to the installer.
+
+CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. `airVersionName` in `gradle.properties` is the base version; builds with `AIR_VERSION_CODE` set append the code, such as `0.1.2+1010`, to distinguish successive builds.
+
+**Enabling in-app updates:** releases made before this feature must be updated manually once by installing a newer `AIR.apk`. Subsequent releases can be downloaded and installed through AIR's update button. Manual APK installation remains available; do not uninstall AIR before updating an existing release.
 
 **Migrating from the old test APKs:** previous CI runs generated a different debug key every time. A release cannot replace those installations without the original signing key. If that key is unavailable, one uninstall/reinstall is needed and clears the old app data. Subsequent AIR releases use the fixed release key and can update in place. Android's [signing](https://developer.android.com/studio/publish/app-signing#considerations) and [versioning](https://developer.android.com/studio/publish/versioning) documentation describe these requirements.
 
-Downloading and installing updates is manual. AIR does not yet check for updates or install them from inside the app.
+Publishing uses GitHub Releases, with no separately operated update server. CI first uploads all assets to a draft and then publishes it. Reruns preserve already published assets; a late older workflow cannot replace a newer release as the latest version. The Actions **AIR** artifact remains available as a build record.
 
 ## What it does
 
@@ -57,6 +65,8 @@ AIR has no app-owned analytics SDK, advertising SDK, server, or account system, 
 
 Websites and the browser engine make network requests needed for normal operation. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
 
+The updater requests public version metadata and, after confirmation, APK files from GitHub. GitHub receives ordinary connection information such as the IP address. AIR sends no browsing URLs, sign-in cookies, account data, or device identifiers in these requests. Update-check timing and the last valid release manifest are stored locally; APKs are held in a private, dedicated cache directory. Debug builds skip automatic release checks because their signing key differs from the release channel.
+
 ## Development
 
 The application uses **Java 17**, **Android Views**, and **GeckoView**. GeckoView handles web rendering and execution.
@@ -81,7 +91,8 @@ Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK loca
 
 - `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
 - `app/`: native screens, QR scanning, browser sessions, Custom Tabs, and callbacks to other apps.
-- `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint and policy tests before uploading the **AIR** artifact.
+- `updates/`: release URL and version policy, bounded HTTPS transfers, checksum checks, and JVM regression tests.
+- `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint, policy tests, and publication tests before uploading the **AIR** artifact. A separate main-only job with repository write permission publishes GitHub Releases.
 
 ### Release signing
 
@@ -102,10 +113,16 @@ bash scripts/build.sh release
 
 The output is `artifacts/release/AIR.apk` with `SHA256SUMS`. Keep local version codes consistent with CI; an artificially high local code can prevent installation of subsequent CI builds. Missing signing credentials stop the release script before it publishes any APK. A direct Gradle `assembleRelease` without credentials creates an unsigned APK for verification only. Release credentials are used only by main-branch CI runs, are restored to a temporary file, and are removed when the job finishes.
 
+CI generates `update.json` from the actual APK using `scripts/release_manifest.py`, then `scripts/publish_release.py` publishes `AIR.apk`, `SHA256SUMS`, and `update.json` under `air-v[versionCode]`. The app reads the public `releases/latest/download/update.json` URL; the manifest points to an immutable APK URL for that exact version. Python 3 and the GitHub CLI are needed for publication. Run the publication regression tests without publishing anything:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+```
+
 After building with the script above, connect an Android device or start an emulator to run the instrumented tests:
 
 ```sh
-./gradlew :navigation:test :app:lintDebug :app:assembleDebugAndroidTest
+./gradlew :navigation:test :updates:test :app:lintDebug :app:assembleDebugAndroidTest
 ./gradlew :app:connectedDebugAndroidTest
 ```
 

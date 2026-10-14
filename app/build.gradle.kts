@@ -5,8 +5,10 @@ val airVersionCode = providers.environmentVariable("AIR_VERSION_CODE")
 require(airVersionCode != null && airVersionCode in 1..2_100_000_000) {
     "AIR_VERSION_CODE / airVersionCode must be a positive integer at most 2100000000."
 }
-val airVersionName = providers.gradleProperty("airVersionName").get()
-require(airVersionName.isNotBlank()) { "airVersionName must not be blank." }
+val airBaseVersionName = providers.gradleProperty("airVersionName").get()
+val airVersionName = if (providers.environmentVariable("AIR_VERSION_CODE").isPresent)
+    "$airBaseVersionName+$airVersionCode" else airBaseVersionName
+require(airVersionName.matches(Regex("[0-9A-Za-z.+_-]{1,64}"))) { "Invalid AIR version name." }
 
 val airSigning = listOf("AIR_KEYSTORE_PATH", "AIR_KEYSTORE_PASSWORD", "AIR_KEY_ALIAS", "AIR_KEY_PASSWORD")
     .associateWith { providers.environmentVariable(it).orNull }
@@ -66,6 +68,7 @@ android {
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(project(":navigation"))
+    implementation(project(":updates"))
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.browser:browser:1.10.0")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")

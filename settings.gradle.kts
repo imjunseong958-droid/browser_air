@@ -18,4 +18,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "AIR"
-include(":app", ":navigation")
+include(":app", ":navigation", ":updates")
