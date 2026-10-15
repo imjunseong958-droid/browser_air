@@ -67,7 +67,7 @@ public final class NavigationPolicyTest {
         assertEquals("menu.restaurant.example", policy.lockedHost());
         assertEquals(ALLOW, policy.evaluate("https://menu.restaurant.example/order", false, true));
         assertEquals(BLOCK_SITE, policy.evaluate("https://different.example/", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://short.example/another-link", false, true));
+        assertEquals(CONFIRM_EXTERNAL, policy.evaluate("https://short.example/another-link", false, true));
     }
 
     @Test public void firstLoadDoesNotAllowScriptOrClickedCrossSiteMoves() {
@@ -226,8 +226,8 @@ public final class NavigationPolicyTest {
     @Test public void authenticationPathTraversalCannotOpenAProvidersFeed() {
         NavigationPolicy policy = site("https://shop.example/");
         policy.evaluate(oauth("identity.example", "https://shop.example/callback", "a"), false, true);
-        assertEquals(BLOCK_SITE, policy.evaluate("https://github.com/login/../explore", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://github.com/login/%2e%2e/explore", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://github.com/login/../explore", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://github.com/login/%2e%2e/explore", true, false));
     }
 
     @Test public void captchaPathTraversalDoesNotOpenASearchFrame() {

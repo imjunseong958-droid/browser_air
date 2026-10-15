@@ -30,10 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.security.MessageDigest;
-import android.Manifest;
-import android.provider.Telephony;
-import androidx.test.rule.GrantPermissionRule;
-import org.junit.Rule;
+import com.google.android.gms.auth.api.phone.SmsRetriever;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -42,7 +39,6 @@ import org.mozilla.geckoview.GeckoView;
 
 @RunWith(AndroidJUnit4.class)
 public final class BrowserIntegrationTest {
-    @Rule public GrantPermissionRule smsPermission = GrantPermissionRule.grant(Manifest.permission.RECEIVE_SMS);
     private FixtureServer server;
     private UiDevice device;
     private ActivityScenario<BrowserActivity> scenario;
@@ -91,7 +87,7 @@ public final class BrowserIntegrationTest {
 
     @Test public void searchEntryNeverStartsEngine() {
         open("https://www.google.com/search?q=test");
-        text("여기서는 검색을 쉬어가요");
+        text("새로운 탐색은 여기서 멈춰요");
         scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
     }
 
@@ -101,9 +97,50 @@ public final class BrowserIntegrationTest {
         text("INSIDE_PAGE");
         awaitUrl("/inside");
         text("OTHER_SITE_LINK").click();
-        device.waitForIdle();
+        text("이 작업에서 이어 열까요?");
         assertFalse("The external host received an HTTP request", server.otherHostVisited.get());
+        text("돌아가기").click();
         assertTrue("Current address: " + displayedUrl(), displayedUrl().endsWith("/inside"));
+    }
+
+    @Test public void anExplicitContinuationOpensTheDisplayedDestination() {
+        open(server.url("/"));
+        text("SAME_SITE_LINK").click();
+        text("OTHER_SITE_LINK").click();
+        text("이 작업에서 이어 열까요?");
+        assertFalse(server.otherHostVisited.get());
+        text("이어서 열기").click();
+        text("OTHER_HOST");
+        assertTrue(server.otherHostVisited.get());
+    }
+
+    @Test public void backgroundingCancelsAnUnconfirmedContinuation() {
+        open(server.url("/inside"));
+        text("OTHER_SITE_LINK").click();
+        text("이 작업에서 이어 열까요?");
+        scenario.moveToState(Lifecycle.State.CREATED);
+        scenario.onActivity(activity -> assertNull(member(activity, "pendingNavigation")));
+        assertFalse(server.otherHostVisited.get());
+        scenario.moveToState(Lifecycle.State.RESUMED);
+        assertEquals(server.url("/inside"), displayedUrl());
+        assertFalse(server.otherHostVisited.get());
+    }
+
+    @Test public void aWrappedExternalEntryLoadsOnlyItsCheckedDestination() {
+        open("https://www.google.com/url?q=" + Uri.encode(server.url("/inside")));
+        text("INSIDE_PAGE");
+        assertEquals(server.url("/inside"), displayedUrl());
+    }
+
+    @Test public void externalPopupsRequireAChoiceAndUseTheCurrentPage() {
+        open(server.url("/inside"));
+        text("OTHER_SITE_POPUP").click();
+        text("이 작업에서 이어 열까요?");
+        assertFalse(server.otherHostVisited.get());
+        text("이어서 열기").click();
+        text("OTHER_HOST");
+        assertTrue(server.otherHostVisited.get());
+        scenario.onActivity(activity -> assertEquals(1, ((java.util.List<?>) member(activity, "sessions")).size()));
     }
 
     @Test public void scriptCannotNavigateOutsideLoadedSite() {
@@ -212,21 +249,46 @@ public final class BrowserIntegrationTest {
     private Object startSms() {
         awaitSmsButton();
         text("문자 자동 로그인 켜기").click();
-        text("인증 문자 기다리는 중 · 끄기");
-        Object request = pendingSms();
-        assertNotNull(request);
-        return request;
+        return awaitPendingSms();
     }
 
-    /** Inject only the new SMS body; all document checks, filling and submission use the real engine. */
+    private void markConsent(Object assist, Object request) throws ReflectiveOperationException {
+        var phase = request.getClass().getDeclaredField("phase");
+        phase.setAccessible(true);
+        for (Object value : phase.getType().getEnumConstants()) {
+            if (value.toString().equals("CONSENT")) phase.set(request, value);
+        }
+        var consent = BrowserSmsAssist.class.getDeclaredField("consentRequest");
+        consent.setAccessible(true);
+        consent.set(assist, request);
+        if (member(assist, "pending") == request) {
+            var stop = BrowserSmsAssist.class.getDeclaredMethod("stopReceiver");
+            stop.setAccessible(true);
+            stop.invoke(assist);
+        }
+    }
+
+    /** Simulate the approved one-message result, then use the real result handler and Gecko bridge. */
     private void receiveSms(Object request, String message) {
         scenario.onActivity(activity -> {
             try {
-                var accept = BrowserSmsAssist.class.getDeclaredMethod("acceptMessage", request.getClass(), String.class);
-                accept.setAccessible(true);
-                accept.invoke(member(activity, "smsAssist"), request, message);
+                Object assist = member(activity, "smsAssist");
+                markConsent(assist, request);
+                var result = BrowserSmsAssist.class.getDeclaredMethod("consentResult", int.class, Intent.class);
+                result.setAccessible(true);
+                result.invoke(assist, android.app.Activity.RESULT_OK,
+                        new Intent().putExtra(SmsRetriever.EXTRA_SMS_MESSAGE, message));
             } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
         });
+    }
+
+    @Test public void installedApkRequestsNoSmsPermissions() throws Exception {
+        Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        String[] permissions = app.getPackageManager().getPackageInfo(app.getPackageName(), PackageManager.GET_PERMISSIONS).requestedPermissions;
+        for (String permission : permissions) {
+            assertFalse(permission, java.util.Set.of("android.permission.RECEIVE_SMS", "android.permission.READ_SMS",
+                    "android.permission.SEND_SMS").contains(permission));
+        }
     }
 
     private Object awaitPendingSms() {
@@ -252,7 +314,7 @@ public final class BrowserIntegrationTest {
         text("OTP_SUBMITTED_001234");
     }
 
-    @Test public void smsNeedsInitialOptInThenFillsAndSubmitsWithoutMoreClicks() {
+    @Test public void smsApprovedMessageFillsAndSubmitsAfterInitialOptIn() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
         awaitSmsButton();
@@ -307,7 +369,7 @@ public final class BrowserIntegrationTest {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
         Object old = startSms();
-        text("인증 문자 기다리는 중 · 끄기").click();
+        text("인증 문자 기다리는 중 · 문자 허용 필요 · 끄기").click();
         assertNull(pendingSms());
         receiveSms(old, "인증번호 123456");
         text("OTP_WAITING");
@@ -333,12 +395,17 @@ public final class BrowserIntegrationTest {
         text("OTP_SUBMITTED_654321");
     }
 
-    @Test public void smsUnrelatedAndWrongDomainMessagesKeepWaitingForTheRightCode() {
+    @Test public void smsCannotFillBeforeOneMessageConsent() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
         Object request = startSms();
-        receiveSms(request, "인증번호 123456\n@other.example #123456");
-        receiveSms(request, "광고: 오늘 행사 안내");
+        scenario.onActivity(activity -> {
+            try {
+                var accept = BrowserSmsAssist.class.getDeclaredMethod("acceptMessage", request.getClass(), String.class);
+                accept.setAccessible(true);
+                accept.invoke(member(activity, "smsAssist"), request, "인증번호 123456");
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
         assertSame(request, pendingSms());
         text("OTP_WAITING");
         receiveSms(request, "인증번호 654321");
@@ -359,11 +426,12 @@ public final class BrowserIntegrationTest {
         Object request = startSms();
         scenario.onActivity(activity -> {
             BroadcastReceiverForTest.receive(member(activity, "smsAssist"), activity,
-                    new Intent(Telephony.Sms.Intents.SMS_RECEIVED_ACTION));
+                    new Intent(SmsRetriever.SMS_RETRIEVED_ACTION));
+            BroadcastReceiverForTest.receive(member(activity, "smsAssist"), activity,
+                    new Intent("android.provider.Telephony.SMS_RECEIVED"));
         });
         assertSame(request, pendingSms());
         assertEquals("WAITING", member(request, "phase").toString());
-        assertNull(BrowserSmsAssist.receivedText(new Intent("unrelated.action")));
     }
 
     @Test public void smsEnabledSettingAutomaticallyAppliesAfterReopeningBrowser() {
@@ -383,25 +451,11 @@ public final class BrowserIntegrationTest {
         Object request = startSms();
         scenario.onActivity(activity -> {
             try {
-                var phase = request.getClass().getDeclaredField("phase");
-                phase.setAccessible(true);
-                for (Object value : phase.getType().getEnumConstants()) {
-                    if (value.toString().equals("CONSENT")) phase.set(request, value);
-                }
-                var consent = BrowserSmsAssist.class.getDeclaredField("consentRequest");
-                consent.setAccessible(true);
-                consent.set(member(activity, "smsAssist"), request);
+                markConsent(member(activity, "smsAssist"), request);
             } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
         });
         scenario.moveToState(Lifecycle.State.CREATED);
         assertSame(request, pendingSms());
-        scenario.onActivity(activity -> {
-            try {
-                var consent = BrowserSmsAssist.class.getDeclaredField("consentRequest");
-                consent.setAccessible(true);
-                consent.set(member(activity, "smsAssist"), null);
-            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
         receiveSms(request, "인증번호 001234");
         assertEquals("CODES", member(request, "phase").toString());
         scenario.moveToState(Lifecycle.State.RESUMED);
@@ -413,18 +467,27 @@ public final class BrowserIntegrationTest {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
         Object request = startSms();
-        scenario.onActivity(activity -> {
-            try {
-                var phase = request.getClass().getDeclaredField("phase");
-                phase.setAccessible(true);
-                for (Object value : phase.getType().getEnumConstants()) {
-                    if (value.toString().equals("CONSENT")) phase.set(request, value);
-                }
-            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
         receiveSms(request, "인증번호 123456\n@other.example #123456");
         assertNull(pendingSms());
         text("OTP_WAITING");
+    }
+
+    @Test public void smsDeniedConsentDoesNotFillOrImmediatelyRequestAgain() {
+        open(server.url("/sms"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        scenario.onActivity(activity -> {
+            try {
+                Object assist = member(activity, "smsAssist");
+                markConsent(assist, request);
+                var result = BrowserSmsAssist.class.getDeclaredMethod("consentResult", int.class, Intent.class);
+                result.setAccessible(true);
+                result.invoke(assist, android.app.Activity.RESULT_CANCELED, null);
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
+        assertNull(pendingSms());
+        text("OTP_WAITING");
+        text("문자 자동 로그인 켜짐 · 끄기");
     }
 
     private static class BroadcastReceiverForTest {
@@ -477,7 +540,9 @@ public final class BrowserIntegrationTest {
                                 + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED_'+[...document.querySelectorAll('#verify input:not(#phone)')].map(i=>i.value).join('')});"
                                 + "</script>";
                     }
-                    else if (route.equals("/inside")) content = "<h1>INSIDE_PAGE</h1><a href='" + other + "'>OTHER_SITE_LINK</a>";
+                    else if (route.equals("/inside")) content = "<h1>INSIDE_PAGE</h1><a href='" + other + "'>OTHER_SITE_LINK</a>"
+                            + "<a target='_blank' href='" + other + "'>OTHER_SITE_POPUP</a>";
+                    else if (route.equals("/outside")) content = "<h1>OTHER_HOST</h1>";
                     else if (route.equals("/popup")) content = "<h1>POPUP_PAGE</h1><button onclick='window.close()'>CLOSE_POPUP</button>";
                     else content = "<h1>FIXTURE_HOME</h1><a href='/inside'>SAME_SITE_LINK</a><br>"
                             + "<button onclick=\"location.href='" + other + "'\">SCRIPT_ESCAPE</button><br>"

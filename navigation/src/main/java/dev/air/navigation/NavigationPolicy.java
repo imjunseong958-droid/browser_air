@@ -9,9 +9,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.LongSupplier;
 
-/** One link, one site. Authentication is a bounded transaction, not a general allowlist. */
+/** One task at a time. Authentication and explicitly chosen continuations are bounded. */
 public final class NavigationPolicy {
-    public enum Decision { ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED }
+    public enum Decision { ALLOW, AUTH_CALLBACK, CONFIRM_EXTERNAL, BLOCK_SEARCH, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED }
 
     private static final long AUTH_TIMEOUT_MS = 15 * 60 * 1000L;
     private static final int MAX_INITIAL_REDIRECTS = 8;
@@ -29,10 +29,16 @@ public final class NavigationPolicy {
 
     private final LongSupplier clock;
     private WebAddress site;
+    private TaskScope task;
+    private TaskScope continuation;
+    private WebAddress pendingContinuation;
+    private boolean resolvingContinuation;
+    private int continuationRedirects;
     private WebAddress pendingInitial;
     private boolean settled;
     private int initialRedirects;
     private AuthTransaction auth;
+    private WebLogin webLogin;
     private final List<AuthTransaction> transactions = new ArrayList<>();
 
     public NavigationPolicy(String initialUrl) {
@@ -41,20 +47,41 @@ public final class NavigationPolicy {
 
     public NavigationPolicy(String initialUrl, LongSupplier clock) {
         this.clock = clock;
-        site = WebAddress.parse(initialUrl);
+        site = WebAddress.parse(resolveLink(initialUrl));
         if (site == null || isSearch(site)) throw new IllegalArgumentException("Invalid entry URL");
         pendingInitial = site;
-        registerAuthorization(site, true);
+        task = new TaskScope(site);
+        WebAddress returning = googleSignInReturn(site);
+        if (returning != null && validWebReturn(returning)) {
+            webLogin = new WebLogin(site, returning, clock.getAsLong());
+            site = returning;
+            task = new TaskScope(site);
+        }
+        registerAuthorization(pendingInitial, true);
     }
 
+    public static String resolveLink(String url) { return WebLinks.resolve(url); }
+
     public static Decision entryDecision(String url) {
-        WebAddress address = WebAddress.parse(url);
+        WebAddress address = WebAddress.parse(resolveLink(url));
         if (address == null) return Decision.BLOCK_INVALID;
         return isSearch(address) ? Decision.BLOCK_SEARCH : Decision.ALLOW;
     }
 
     public String lockedHost() { return site.host(); }
-    public boolean isAuthenticating() { return auth != null && !authExpired(); }
+    public boolean isAuthenticating() {
+        return (auth != null && !authExpired()) || (webLogin != null && !webLoginExpired());
+    }
+
+    /** The UI may grant this only after an explicit choice for the displayed destination. */
+    public boolean approveContinuation(String url) {
+        if (evaluate(url, false, true) != Decision.CONFIRM_EXTERNAL) return false;
+        pendingContinuation = WebAddress.parse(resolveLink(url));
+        continuation = new TaskScope(pendingContinuation);
+        resolvingContinuation = true;
+        continuationRedirects = 0;
+        return true;
+    }
 
     /** After an HTTPS app callback has no installed handler, render its exact web return destination. */
     public boolean completeWebCallback(String url) {
@@ -62,6 +89,9 @@ public final class NavigationPolicy {
         AuthTransaction returning = callbackTransaction(url);
         if (callback == null || returning == null || expired(returning)) return false;
         site = callback;
+        task = new TaskScope(callback);
+        continuation = null;
+        resolvingContinuation = false;
         pendingInitial = callback;
         settled = true;
         completeTransaction(returning);
@@ -69,27 +99,56 @@ public final class NavigationPolicy {
     }
 
     public Decision evaluate(String url, boolean redirect, boolean userGesture) {
+        url = resolveLink(url);
+        if (url == null) return Decision.BLOCK_INVALID;
+        WebAddress target = WebAddress.parse(url);
+        if (target != null && isSearch(target)) return Decision.BLOCK_SEARCH;
         AuthTransaction returning = callbackTransaction(url);
         if (returning != null) {
             if (expired(returning)) return Decision.BLOCK_EXPIRED;
             WebAddress callback = WebAddress.parse(url);
-            if (callback != null && site.sameSite(callback)) {
+            if (callback != null && withinTask(callback)) {
                 completeTransaction(returning);
                 settled = true;
                 return Decision.ALLOW;
             }
             return Decision.AUTH_CALLBACK;
         }
-        WebAddress target = WebAddress.parse(url);
         if (target == null) return Decision.BLOCK_INVALID;
-        if (isSearch(target)) return Decision.BLOCK_SEARCH;
         if (transactions.stream().anyMatch(transaction -> sameEndpoint(transaction.callback, target.uri()))
                 && hasAuthResult(target.uri())) return Decision.BLOCK_SITE;
 
-        if (site.sameSite(target)) {
+        if (webLogin != null) {
+            if (withinTask(target)) {
+                if (webLoginExpired()) return Decision.BLOCK_EXPIRED;
+                webLogin = null;
+            } else if (isGoogleSignIn(target) && webLogin.provider.sameOrigin(target)) {
+                if (webLoginExpired()) return Decision.BLOCK_EXPIRED;
+                return googleSignInStepAllowed(target) ? Decision.ALLOW : Decision.BLOCK_SITE;
+            } else return webLoginExpired() ? Decision.BLOCK_EXPIRED : Decision.BLOCK_SITE;
+        }
+
+        if (withinTask(target)) {
             registerAuthorization(target, false);
             if (!settled) pendingInitial = target;
             return Decision.ALLOW;
+        }
+
+        WebAddress webReturn = googleSignInReturn(target);
+        if (auth == null && webLogin == null && webReturn != null && validWebReturn(webReturn)) {
+            boolean shortForm = !settled && redirect && !userGesture && site.host().equals("forms.gle")
+                    && webReturn.host().equals("docs.google.com") && new TaskScope(webReturn).isDocument()
+                    && initialRedirects < MAX_INITIAL_REDIRECTS;
+            if (withinTask(webReturn) || shortForm) {
+                if (shortForm) {
+                    initialRedirects++;
+                    site = webReturn;
+                    task = new TaskScope(site);
+                }
+                webLogin = new WebLogin(target, webReturn, clock.getAsLong());
+                if (!settled) pendingInitial = target;
+                return Decision.ALLOW;
+            }
         }
 
         // Resolve only the original server redirect chain, before a document has loaded.
@@ -100,7 +159,22 @@ public final class NavigationPolicy {
             pendingInitial = target;
             if (auth != null && target.scheme().equals("https")) auth.origins.add(origin(target));
             registerAuthorization(target, true);
+            if (auth == null && webLogin == null && !isAuthenticationPage(target)) {
+                site = target;
+                task = new TaskScope(target);
+            }
             return Decision.ALLOW;
+        }
+
+        if (resolvingContinuation && redirect && !userGesture && continuationRedirects < MAX_INITIAL_REDIRECTS) {
+            if (pendingContinuation.scheme().equals("https") && !target.scheme().equals("https")) return Decision.BLOCK_SITE;
+            // A continuation resolves its own link; it never widens the original task.
+            if (auth == null && webLogin == null && !isAuthenticationPage(target)) {
+                continuationRedirects++;
+                pendingContinuation = target;
+                continuation = new TaskScope(target);
+                return Decision.ALLOW;
+            }
         }
 
         // OAuth requests may leave the site only when their return URI is scoped to this session.
@@ -118,18 +192,34 @@ public final class NavigationPolicy {
                 return Decision.ALLOW;
             }
         }
+        if (settled && userGesture && !redirect && auth == null && webLogin == null
+                && !isAuthenticationPage(target) && !isCaptcha(target)
+                && !(site.scheme().equals("https") && target.scheme().equals("http"))) {
+            return Decision.CONFIRM_EXTERNAL;
+        }
         return Decision.BLOCK_SITE;
     }
 
     /** Called after the initial redirect chain reaches its first document. */
     public void pageLoaded(String url) {
         WebAddress finalAddress = WebAddress.parse(url);
+        if (resolvingContinuation && finalAddress != null) {
+            if (pendingContinuation.sameOrigin(finalAddress)) continuation = new TaskScope(finalAddress);
+            resolvingContinuation = false;
+        }
         if (settled) {
-            if (site.sameSite(finalAddress) && finalAddress.scheme().equals("https")) site = finalAddress;
+            if (task.allows(finalAddress) && finalAddress.scheme().equals("https")) {
+                site = finalAddress;
+                task = new TaskScope(finalAddress);
+            }
             return;
         }
         if (finalAddress != null && pendingInitial.sameOrigin(finalAddress)) {
-            site = finalAddress;
+            // A sign-in page is a temporary step, not the task's new home.
+            if (webLogin == null) {
+                site = finalAddress;
+                task = new TaskScope(finalAddress);
+            }
             settled = true;
         }
     }
@@ -138,10 +228,13 @@ public final class NavigationPolicy {
         WebAddress target = WebAddress.parse(url);
         if (target == null) return Decision.BLOCK_INVALID;
         if (isSearch(target) && !isCaptcha(target)) return Decision.BLOCK_SEARCH;
-        if (site.sameSite(target) || (!settled && pendingInitial.sameSite(target)) || isCaptcha(target)) {
+        if (withinTask(target) || (!settled && webLogin == null && new TaskScope(pendingInitial).allows(target)) || isCaptcha(target)) {
             return Decision.ALLOW;
         }
-        if (isAuthenticating() && (auth.origins.contains(origin(target)) || IDENTITY_HOSTS.contains(target.host()))
+        if (webLogin != null && !webLoginExpired() && googleSignInStepAllowed(target)) {
+            return Decision.ALLOW;
+        }
+        if (auth != null && !authExpired() && (auth.origins.contains(origin(target)) || IDENTITY_HOSTS.contains(target.host()))
                 && isAuthenticationPage(target)) return Decision.ALLOW;
         return Decision.BLOCK_SITE;
     }
@@ -162,7 +255,7 @@ public final class NavigationPolicy {
         } catch (IllegalArgumentException ignored) { return false; }
         if (!initial) {
             WebAddress webCallback = WebAddress.parse(redirectUri);
-            boolean returnsToSite = site.sameSite(webCallback);
+            boolean returnsToSite = withinTask(webCallback);
             boolean returnsToTransaction = transactions.stream().anyMatch(transaction -> sameEndpoint(transaction.callback, callback));
             if (!returnsToSite && !returnsToTransaction) return false;
         }
@@ -230,8 +323,40 @@ public final class NavigationPolicy {
     }
 
     private boolean authExpired() { return auth != null && expired(auth); }
+    private boolean webLoginExpired() { return clock.getAsLong() - webLogin.startedAt > AUTH_TIMEOUT_MS; }
     private boolean expired(AuthTransaction transaction) { return clock.getAsLong() - transaction.startedAt > AUTH_TIMEOUT_MS; }
     private static String origin(WebAddress value) { return value.scheme() + "://" + value.host() + ":" + value.port(); }
+
+    private boolean withinTask(WebAddress target) {
+        return task.allows(target) || (continuation != null && continuation.allows(target));
+    }
+
+    private static boolean isGoogleSignIn(WebAddress target) {
+        if (!target.scheme().equals("https") || target.port() != 443
+                || !Set.of("accounts.google.com", "accounts.google.co.kr").contains(target.host())) return false;
+        String path = target.normalizedPath();
+        return path.matches("/(?:ServiceLogin(?:Auth)?|AccountChooser|Login|InteractiveLogin|CheckCookie|CheckCookieError)/?")
+                || path.startsWith("/signin/") || path.startsWith("/v3/signin/") || path.startsWith("/v2/signin/")
+                || path.equals("/v2/identifier");
+    }
+
+    private static WebAddress googleSignInReturn(WebAddress target) {
+        if (!isGoogleSignIn(target)) return null;
+        return WebAddress.parse(resolveLink(target.parameters().get("continue")));
+    }
+
+    private boolean googleSignInStepAllowed(WebAddress target) {
+        if (!isGoogleSignIn(target) || !webLogin.provider.sameOrigin(target)) return false;
+        Map<String, String> query = target.parameters();
+        if (target.uri().getRawQuery() != null && !target.uri().getRawQuery().isEmpty() && query.isEmpty()) return false;
+        WebAddress returning = googleSignInReturn(target);
+        return !query.containsKey("continue") || (returning != null && webLogin.returning.allows(returning));
+    }
+
+    private static boolean validWebReturn(WebAddress target) {
+        return target.scheme().equals("https") && !isSearch(target)
+                && !Set.of("accounts.google.com", "accounts.google.co.kr").contains(target.host());
+    }
 
     private static boolean isAuthenticationPage(WebAddress url) {
         String path = url.normalizedPath().toLowerCase(Locale.ROOT);
@@ -250,15 +375,18 @@ public final class NavigationPolicy {
     }
 
     public static boolean isSearch(WebAddress url) {
-        String host = url.host().startsWith("www.") ? url.host().substring(4) : url.host();
-        return host.startsWith("google.") || host.equals("bing.com") || host.equals("cn.bing.com")
-                || host.equals("duckduckgo.com") || host.equals("html.duckduckgo.com")
-                || host.equals("lite.duckduckgo.com") || host.equals("search.yahoo.com")
-                || host.equals("search.naver.com") || host.equals("m.search.naver.com")
-                || host.equals("naver.com") || host.equals("m.naver.com")
-                || host.equals("daum.net") || host.equals("m.daum.net") || host.equals("search.daum.net")
-                || host.equals("search.brave.com") || host.equals("ecosia.org")
-                || host.equals("yandex.com") || host.equals("yandex.ru") || host.equals("baidu.com");
+        return WebLinks.isDiscovery(url);
+    }
+
+    private static final class WebLogin {
+        final WebAddress provider;
+        final TaskScope returning;
+        final long startedAt;
+        WebLogin(WebAddress provider, WebAddress returning, long startedAt) {
+            this.provider = provider;
+            this.returning = new TaskScope(returning);
+            this.startedAt = startedAt;
+        }
     }
 
     private static final class AuthTransaction {

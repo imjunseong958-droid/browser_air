@@ -1,16 +1,11 @@
 package dev.air.browser;
 
-import android.Manifest;
 import android.app.Activity;
-import android.os.Build;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
-import android.provider.Telephony;
-import android.telephony.SmsMessage;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -40,24 +35,15 @@ import org.json.JSONObject;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.WebExtension;
 
-/** Opt-in SMS sign-in, bound to one foreground document and a five-minute receive window. */
+/** One-message consent on every Android version, scoped to one foreground document. */
 final class BrowserSmsAssist {
     static final String EXTENSION_ID = "sms-assist@air.local";
     private static final String NATIVE_APP = "air_sms";
     private static final long WAIT_MS = 5 * 60_000;
     private enum Phase { STARTING, WAITING, CONSENT, CODES, SCANNING, FIELDS, FILLING }
 
-    // Android 17 delays OTP broadcasts for ordinary apps. Use its supported one-message API there.
-    private final boolean consentMode = Build.VERSION.SDK_INT >= 37;
-
-    private boolean consentAvailable() {
+    private boolean available() {
         return GoogleApiAvailability.getInstance().isGooglePlayServicesAvailable(activity) == ConnectionResult.SUCCESS;
-    }
-
-    private boolean available() { return consentMode ? consentAvailable() : hasPermission(); }
-
-    private boolean hasPermission() {
-        return ContextCompat.checkSelfPermission(activity, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
     }
 
     private static final class Page {
@@ -90,12 +76,10 @@ final class BrowserSmsAssist {
     private final Map<GeckoSession, Page> pages = new IdentityHashMap<>();
     private final Set<GeckoSession> attached = Collections.newSetFromMap(new IdentityHashMap<>());
     private WebExtension extension;
-    private final ActivityResultLauncher<String> permissionLauncher;
     private final ActivityResultLauncher<Intent> consentLauncher;
     private Request consentRequest;
     private final SharedPreferences preferences;
     private boolean enabled;
-    private boolean requestingPermission;
     private BroadcastReceiver receiver;
     private AlertDialog dialog;
     private Request pending;
@@ -109,32 +93,27 @@ final class BrowserSmsAssist {
         preferences = activity.getSharedPreferences("sms_assist", Context.MODE_PRIVATE);
         enabled = preferences.getBoolean("enabled", false);
         button.setEnabled(false);
-        permissionLauncher = activity.registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
-            requestingPermission = false;
-            if (destroyed) return;
-            setEnabled(granted);
-            if (granted) begin();
-            else toast(R.string.sms_permission_denied);
-            refresh();
-        });
         consentLauncher = activity.registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
-            Request request = consentRequest;
-            consentRequest = null;
-            if (!current(request) || request.phase != Phase.CONSENT) { refresh(); return; }
-            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
-                request.page.completed = true; cancel(); return;
-            }
-            acceptMessage(request, result.getData().getStringExtra(SmsRetriever.EXTRA_SMS_MESSAGE));
+            consentResult(result.getResultCode(), result.getData());
         });
         button.setOnClickListener(view -> {
             if (enabled) { setEnabled(false); cancel(); return; }
-            if (consentMode && !consentAvailable()) { toast(R.string.sms_unavailable); return; }
-            if (available()) { setEnabled(true); begin(); }
-            else {
-                requestingPermission = true;
-                permissionLauncher.launch(Manifest.permission.RECEIVE_SMS);
-            }
+            if (!available()) { toast(R.string.sms_unavailable); return; }
+            setEnabled(true);
+            begin();
         });
+    }
+
+    private void consentResult(int resultCode, Intent data) {
+        Request request = consentRequest;
+        consentRequest = null;
+        if (!current(request) || request.phase != Phase.CONSENT) { refresh(); return; }
+        if (resultCode != Activity.RESULT_OK || data == null) {
+            request.page.completed = true;
+            cancel();
+            return;
+        }
+        acceptMessage(request, data.getStringExtra(SmsRetriever.EXTRA_SMS_MESSAGE));
     }
 
     void attach(GeckoSession session) {
@@ -183,10 +162,10 @@ final class BrowserSmsAssist {
 
     private void begin() {
         Page page = visiblePage();
-        if (!enabled || !resumed || page == null || !page.hasTarget || pending != null || requestingPermission || consentRequest != null || dialog != null) return;
+        if (!enabled || !resumed || page == null || !page.hasTarget || pending != null || consentRequest != null || dialog != null) return;
         if (!available()) return;
         Request request = new Request(page, activity.smsPageUrl(), ++sequence);
-        request.phase = consentMode ? Phase.STARTING : Phase.WAITING;
+        request.phase = Phase.STARTING;
         pending = request;
         expiry = () -> { if (pending == request) { page.completed = true; cancel(); if (resumed) toast(R.string.sms_timeout); } };
         handler.postDelayed(expiry, WAIT_MS);
@@ -194,12 +173,6 @@ final class BrowserSmsAssist {
             receiver = new BroadcastReceiver() {
                 @Override public void onReceive(Context context, Intent intent) {
                     if (!current(request) || !resumed || request.phase != Phase.WAITING || !available()) return;
-                    if (!consentMode) {
-                        if (!Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return;
-                        String message = receivedText(intent);
-                        if (message != null) acceptMessage(request, message);
-                        return;
-                    }
                     if (!SmsRetriever.SMS_RETRIEVED_ACTION.equals(intent.getAction())) return;
                     Status status = IntentCompat.getParcelableExtra(intent, SmsRetriever.EXTRA_STATUS, Status.class);
                     if (status == null) return;
@@ -215,11 +188,10 @@ final class BrowserSmsAssist {
                     catch (RuntimeException ignored) { consentRequest = null; page.completed = true; cancel(); toast(R.string.sms_start_failed); }
                 }
             };
-            // Both receivers authenticate the sending UID with the system/Play services signature permission.
-            String action = consentMode ? SmsRetriever.SMS_RETRIEVED_ACTION : Telephony.Sms.Intents.SMS_RECEIVED_ACTION;
-            String permission = consentMode ? SmsRetriever.SEND_PERMISSION : "android.permission.BROADCAST_SMS";
-            ContextCompat.registerReceiver(activity, receiver, new IntentFilter(action), permission, null, ContextCompat.RECEIVER_EXPORTED);
-            if (consentMode) SmsRetriever.getClient(activity).startSmsUserConsent(null)
+            // Only Play services can send this broadcast; AIR requests no SMS permission.
+            ContextCompat.registerReceiver(activity, receiver, new IntentFilter(SmsRetriever.SMS_RETRIEVED_ACTION),
+                    SmsRetriever.SEND_PERMISSION, null, ContextCompat.RECEIVER_EXPORTED);
+            SmsRetriever.getClient(activity).startSmsUserConsent(null)
                     .addOnSuccessListener(ignored -> {
                         if (current(request) && request.phase == Phase.STARTING) { request.phase = Phase.WAITING; refresh(); }
                     }).addOnFailureListener(ignored -> {
@@ -264,14 +236,15 @@ final class BrowserSmsAssist {
     }
 
     private void acceptMessage(Request request, String message) {
-        if (!current(request) || (request.phase != Phase.WAITING && request.phase != Phase.CONSENT)
-                || (!resumed && request.phase != Phase.CONSENT)) return;
+        if (!current(request) || request.phase != Phase.CONSENT) return;
         WebAddress address = WebAddress.parse(request.url);
         request.codes = SmsCodeParser.parse(message, address == null ? null : address.host());
-        // Unrelated messages (including wrong-host codes) must not end the active wait.
+        // Consent grants one message only; a mismatch requires a fresh receive window.
         if (request.codes.values().isEmpty()) {
             request.codes = null;
-            if (request.phase == Phase.CONSENT) { request.page.completed = true; cancel(); toast(R.string.sms_no_code); }
+            request.page.completed = true;
+            cancel();
+            toast(R.string.sms_no_code);
             return;
         }
         stopReceiver();
@@ -416,7 +389,7 @@ final class BrowserSmsAssist {
         if (destroyed) return;
         Page page = visiblePage();
         if (resumed && enabled && page != null && page.hasTarget && !page.completed
-                && pending == null && dialog == null && !requestingPermission && consentRequest == null && available()) begin();
+                && pending == null && dialog == null && consentRequest == null && available()) begin();
         updateButton();
     }
 
@@ -426,8 +399,8 @@ final class BrowserSmsAssist {
         button.setText(!enabled ? R.string.sms_assist
                 : pending == null ? R.string.sms_enabled
                 : pending.phase == Phase.STARTING ? R.string.sms_preparing
-                : pending.phase == Phase.WAITING ? (consentMode ? R.string.sms_waiting_consent : R.string.sms_waiting) : R.string.sms_filling);
-        button.setEnabled(!requestingPermission && consentRequest == null && (enabled || page != null));
+                : pending.phase == Phase.WAITING ? R.string.sms_waiting_consent : R.string.sms_filling);
+        button.setEnabled(consentRequest == null && (enabled || page != null));
     }
 
     void pause() {
@@ -441,24 +414,6 @@ final class BrowserSmsAssist {
         if (enabled && !available()) setEnabled(false);
         if (pending != null && pending.phase == Phase.CODES) chooseCode(pending);
         refresh();
-    }
-
-    /** Decode this broadcast only, including multipart SMS, without querying stored messages. */
-    static String receivedText(Intent intent) {
-        if (intent == null || !Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(intent.getAction())) return null;
-        try {
-            SmsMessage[] parts = Telephony.Sms.Intents.getMessagesFromIntent(intent);
-            if (parts == null || parts.length == 0 || parts.length > 64) return null;
-            StringBuilder text = new StringBuilder();
-            String sender = parts[0] == null ? null : parts[0].getOriginatingAddress();
-            if (sender == null) return null;
-            for (SmsMessage part : parts) {
-                if (part == null || !sender.equals(part.getOriginatingAddress()) || part.getMessageBody() == null) return null;
-                text.append(part.getMessageBody());
-                if (text.length() > 8192) return null;
-            }
-            return text.toString();
-        } catch (RuntimeException ignored) { return null; }
     }
 
     void destroy() {
