@@ -1,0 +1,43 @@
+AIR task boundaries and permissionless SMS verification
+Date: 2026-10-15 (Asia/Seoul)
+Device: ARM64 Pixel 7 emulator, Android 15 / API 35, Google Play services
+Release: dev.air.browser 0.1.3+1017, minSdk 29, targetSdk 37
+
+Passed:
+- 51 navigation/Firebase policy tests
+- 14 update unit tests
+- 11 SMS parser tests
+- 22 JavaScript field/bridge tests
+- 10 release-publication tests (mocked GitHub; no publication performed)
+- 34 emulator integration checks: 27 browser/SMS, 7 updater
+- Debug and optimized release builds; Android Lint for both variants
+- Signature verification; same certificate as public release 0.1.2+1016
+- Actual debug and signed release APK metadata: no RECEIVE_SMS, READ_SMS, SEND_SMS
+- Real Google Play services consent dialog: synthetic SMS 001234, one Allow tap,
+  automatic input and form verification, CONSENT_SMS_COMPLETE
+- In-place signed release upgrade 1016 -> 1017, retaining localStorage and a
+  persistent cookie (Max-Age=3600)
+- User-supplied Forms short link displayed its form in the installed release;
+  no form response, credentials, or real account sign-in were submitted
+
+Policy coverage includes checked wrapper destinations; Google account selection
+with a task-bound return; initial sign-in documents preserving the task; resource
+identity for Google forms/documents/Drive files; search and recommendation routes;
+explicit continuations and cancellation; background cancellation; external popups;
+existing OAuth state, callback, expiry, nesting and Firebase protections.
+
+SMS coverage includes rejecting input before one-message consent; consent denial;
+stale and wrong-host results; paused consent results; single/split OTP fields;
+ambiguous-code selection; automatic verification; navigation/background cancellation.
+
+Release APK SHA-256:
+83bf9612a2d33910c392539eba68bcd2123277be32651a734564d0ce917c9a78
+
+Local install artifact: artifacts/release/AIR.apk (ignored by Git)
+Detailed local logs/UI captures: .tools/task-boundary-* (ignored by Git)
+No GitHub update-channel publication was performed.
+
+Remaining device checks:
+- The affected Samsung phone's installation warning and subsequent in-app update
+- Carrier-delivered SMS and Google Play services differences on physical devices
+- Real provider account sign-ins; no broad provider compatibility is claimed

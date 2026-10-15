@@ -2,6 +2,20 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Task boundaries and one-message consent — 15 October 2026
+
+The current implementation replaces the earlier direct-SMS behavior described below. All supported Android versions use Google Play services SMS User Consent, and the production manifest has no SMS receive/read/send permission.
+
+- **51 navigation/Firebase tests**, **14 update tests**, **11 SMS parser tests**, **22 JavaScript field/bridge tests**, and **10 release-publication tests** passed. Both debug and optimized release builds and Android Lint passed.
+- **34 emulator integration checks** passed: 27 browser/SMS checks and seven updater checks. This includes wrapper resolution, choosing/cancelling an external continuation, background cancellation, external popup handling, existing OAuth/Firebase callbacks, refusal to fill before consent, denied consent, stale/wrong-host results, and automatic filling/submission after an approved result.
+- A real Google Play services one-message consent dialog was checked on the API 35 emulator using a synthetic incoming SMS. The OTP field remained empty before approval. Tapping **Allow** once filled `001234`, submitted the local verification form, and displayed `CONSENT_SMS_COMPLETE`, without further code/field/verify taps.
+- The signed **0.1.3+1017** APK was checked against the previous public **0.1.2+1016** release: the signing certificate is identical, and APK metadata declares no `RECEIVE_SMS`, `READ_SMS`, or `SEND_SMS`. Release-manifest generation also rejects APK metadata containing any of those permissions.
+- An in-place install of the signed 1017 APK over the public 1016 APK succeeded on the emulator. A local fixture's `localStorage` value and persistent cookie (`Max-Age=3600`) survived the update. Session cookies are not a persistence guarantee across app-process restarts. The user-supplied Forms short link also resolved and displayed its application form in the installed release, without submitting a response or signing in.
+
+Evidence for this run is summarized in `artifacts/verification/task-boundary-consent.txt`. Detailed local build/device logs and synthetic UI captures are under `.tools/task-boundary-*` (ignored by Git).
+
+The affected Samsung device is not connected. Removing SMS permissions addresses a documented Play Protect condition; it does not establish that a particular manufacturer warning has disappeared. Installation and the next in-app update still require verification on that phone. Real account sign-ins across providers and Android versions remain outside this emulator check.
+
 ## Build and installation
 
 - Gradle build and Android Lint completed with zero errors. Some dependency-update and layout recommendations remain as warnings.
@@ -27,7 +41,7 @@ The fourteen SMS checks cover waiting only on recognized verification screens, i
 
 **11 SMS parser unit tests**, **22 JavaScript field/bridge tests**, **14 update unit tests**, **35 navigation unit tests**, and **9 release-publication tests** passed. The JavaScript checks include controlled form events and delayed button enablement, submitting exactly once, cancellation between input and submission, refusing payment/transfer controls, split widgets with edited/disabled digits, late-mounted widgets, and automatic retry detection. Both debug and optimized unsigned release APKs built and Android Lint finished with zero errors.
 
-## SMS sign-in on the emulator
+## Previous direct-SMS verification (superseded)
 
 On Android 10–16, AIR uses a dynamically registered `SMS_RECEIVED_ACTION` receiver after the user's explicit opt-in and Android runtime `RECEIVE_SMS` grant. A single approval enables subsequent recognized verification screens; no per-message Android dialog or normal code/field selection is needed. The receiver is authenticated with `BROADCAST_SMS`, and message text is discarded after parsing. The merged manifest requests `RECEIVE_SMS` but has no `READ_SMS`, `SEND_SMS`, or notification-listener permission.
 
@@ -48,7 +62,7 @@ The production feature is limited to HTTPS pages. Debug builds allow localhost/1
 
 Completed sign-ins using real Google, Kakao, Naver, banking, or other service accounts have not been tested. These checks cover the engine, browser protocols, navigation policy, and callbacks to other apps; they do not establish compatibility with every service. Custom SAML or native authentication flows, apps that specifically require Chrome, unfamiliar authentication or payment frames, and device-specific passkey behavior need testing with the actual apps and devices.
 
-Carrier-delivered SMS on physical devices, manufacturer-specific behavior, and service-specific OTP forms still need testing. SMS codes received through RCS/email and embedded-frame fields are outside the current feature's scope. Split one-character widgets are supported when the complete 4–10-character group is identifiable and empty; unsupported/custom widgets retain manual input. Installer restrictions on `RECEIVE_SMS`, SMS Retriever messages bound to other apps, and the Android 17 consent fallback need physical-device coverage. The SMS extension's `manifest.json` version must be increased when changing its scripts so GeckoView's persisted built-in extension is refreshed on upgrade.
+Carrier-delivered SMS on physical devices, manufacturer-specific behavior, and service-specific OTP forms still need testing. SMS codes received through RCS/email and embedded-frame fields are outside the current feature's scope. Split one-character widgets are supported when the complete 4–10-character group is identifiable and empty; unsupported/custom widgets retain manual input. The current one-message consent implementation needs physical-device coverage on all supported Android versions, including eligible-message and Google Play services behavior. The SMS extension's `manifest.json` version must be increased when changing its scripts so GeckoView's persisted built-in extension is refreshed on upgrade.
 
 The Firebase adapter was implemented after inspecting the manifest and distributed class contracts in Google's [Firebase Auth Android SDK 25.0.0](https://dl.google.com/dl/android/maven2/com/google/firebase/firebase-auth/25.0.0/firebase-auth-25.0.0.aar). The test receiver reproduces the activity and intent contract. It does not substitute for verification using the real Firebase SDK and server. The SDK was not added as an AIR app dependency.
 
