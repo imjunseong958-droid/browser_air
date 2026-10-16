@@ -46,7 +46,7 @@
         let result = AirSmsFields.scan(document, message.code);
         // Some sites mount their OTP widget only after the SMS has been requested.
         for (let attempt = 0; (document.visibilityState !== "visible" || !result.targets.some(target => target.identified))
-          && attempt < 20 && bound(); attempt++) {
+          && attempt < 100 && bound(); attempt++) {
           await new Promise(resolve => setTimeout(resolve, 100));
           result = AirSmsFields.scan(document, message.code);
         }
@@ -70,7 +70,7 @@
     });
     observer = new MutationObserver(scheduleState);
     observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true,
-      attributeFilter: ["autocomplete", "disabled", "readonly", "hidden", "style", "class", "maxlength", "id", "name", "aria-label", "placeholder"] });
+      attributeFilter: ["autocomplete", "disabled", "readonly", "hidden", "style", "class", "maxlength", "type", "inputmode", "id", "name", "aria-label", "placeholder"] });
     reportState("ready");
   }
   connect();

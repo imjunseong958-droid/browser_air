@@ -40,6 +40,8 @@ final class BrowserSmsAssist {
     static final String EXTENSION_ID = "sms-assist@air.local";
     private static final String NATIVE_APP = "air_sms";
     private static final long WAIT_MS = 5 * 60_000;
+    // Each phase allows either the extension's 10-second scan or its 8-second completion wait.
+    private static final long RESPONSE_MS = 15_000;
     private enum Phase { STARTING, WAITING, CONSENT, CODES, SCANNING, FIELDS, FILLING }
 
     private boolean available() {
@@ -231,7 +233,11 @@ final class BrowserSmsAssist {
         else if (type.equals("filled") && request.phase == Phase.FILLING) {
             boolean success = message.optBoolean("success");
             if (!success) showFallback(request);
-            else { page.completed = true; cancel(); }
+            else {
+                page.completed = true;
+                cancel();
+                if (!message.optBoolean("submitted")) toast(R.string.sms_filled_manual);
+            }
         }
     }
 
@@ -268,6 +274,7 @@ final class BrowserSmsAssist {
         request.code = code;
         request.codes = null;
         request.phase = Phase.SCANNING;
+        updateButton();
         post(request, "scan", null);
         expireResponse(request, Phase.SCANNING);
     }
@@ -300,6 +307,7 @@ final class BrowserSmsAssist {
     private void fill(Request request, String field) {
         if (!current(request) || !resumed) { cancel(); return; }
         request.phase = Phase.FILLING;
+        updateButton();
         post(request, "fill", field);
         expireResponse(request, Phase.FILLING);
     }
@@ -316,8 +324,11 @@ final class BrowserSmsAssist {
 
     private void expireResponse(Request request, Phase phase) {
         handler.postDelayed(() -> {
-            if (pending == request && request.phase == phase) { request.page.completed = true; cancel(); if (resumed) toast(R.string.sms_input_failed); }
-        }, 5000);
+            if (pending == request && request.phase == phase) {
+                if (resumed && current(request)) showFallback(request);
+                else cancel();
+            }
+        }, RESPONSE_MS);
     }
 
     private void showFallback(Request request) {
@@ -399,7 +410,8 @@ final class BrowserSmsAssist {
         button.setText(!enabled ? R.string.sms_assist
                 : pending == null ? R.string.sms_enabled
                 : pending.phase == Phase.STARTING ? R.string.sms_preparing
-                : pending.phase == Phase.WAITING ? R.string.sms_waiting_consent : R.string.sms_filling);
+                : pending.phase == Phase.WAITING ? R.string.sms_waiting_consent
+                : pending.phase == Phase.SCANNING ? R.string.sms_waiting_field : R.string.sms_filling);
         button.setEnabled(consentRequest == null && (enabled || page != null));
     }
 

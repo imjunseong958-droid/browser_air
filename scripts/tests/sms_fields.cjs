@@ -154,6 +154,185 @@ test("field labels are bounded and stripped of bidirectional control characters"
   assert.ok(label.length <= 80);
 });
 
+test("completion retries once when a controlled input clears the inserted code", async () => {
+  for (const synchronous of [true, false]) {
+    const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>로그인</button></form>');
+    const input = document.querySelector("input");
+    let writes = 0, submits = 0;
+    input.addEventListener("input", event => {
+      assert.equal(event.inputType, "insertReplacementText");
+      assert.equal(event.data, "001234");
+      if (++writes === 1) {
+        if (synchronous) input.value = "";
+        else setTimeout(() => { input.value = ""; }, 20);
+      }
+    });
+    document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); submits++; });
+    const result = await fields.complete(target(document, fields), "001234");
+    assert.equal(result.success, true);
+    assert.equal(result.submitted, true);
+    assert.equal(input.value, "001234");
+    assert.equal(document.activeElement, input);
+    assert.equal(writes, 2);
+    assert.equal(submits, 1);
+    window.close();
+  }
+});
+
+test("repeatedly rejected input fails without claiming success or clicking verify", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  let writes = 0, clicks = 0;
+  const input = document.querySelector("input");
+  input.addEventListener("input", () => { writes++; setTimeout(() => { input.value = ""; }, 20); });
+  document.addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, false);
+  assert.equal(result.submitted, false);
+  assert.equal(input.value, "");
+  assert.equal(writes, 2);
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("a replaced OTP input in the same form is rescanned and verified once", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  let submits = 0;
+  const old = document.querySelector("input");
+  old.addEventListener("input", () => setTimeout(() => {
+    old.outerHTML = '<input id="replacement" autocomplete="one-time-code">';
+  }, 20), { once: true });
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); submits++; });
+  const result = await fields.complete(target(document, fields), "001234");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, true);
+  assert.equal(document.getElementById("replacement").value, "001234");
+  assert.equal(submits, 1);
+  window.close();
+});
+
+test("focus handlers can replace the OTP widget before its first value is inserted", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  const old = document.querySelector("input");
+  old.addEventListener("focus", () => { old.outerHTML = '<input id="replacement" autocomplete="one-time-code">'; }, { once: true });
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  assert.equal((await fields.complete(target(document, fields), "123456")).submitted, true);
+  assert.equal(old.value, "");
+  assert.equal(document.getElementById("replacement").value, "123456");
+  window.close();
+});
+
+test("a user-edited value is not overwritten or treated as a successful fill", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  let clicks = 0;
+  const input = document.querySelector("input");
+  input.addEventListener("input", () => setTimeout(() => { input.value = "12"; }, 20));
+  document.addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, false);
+  assert.equal(input.value, "12");
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("retry cannot move a code into another form or a replacement document section", async () => {
+  const { window, document, fields } = fixture('<form id="original"><input autocomplete="one-time-code"><button>Verify</button></form>');
+  document.querySelector("input").addEventListener("input", () => setTimeout(() => {
+    document.getElementById("original").outerHTML = '<form><input id="other" autocomplete="one-time-code"><button>Verify</button></form>';
+  }, 20));
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, false);
+  assert.equal(document.getElementById("other").value, "");
+  window.close();
+});
+
+test("completion waits beyond two seconds for the site's login button", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button disabled>로그인</button></form>');
+  let submits = 0;
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); submits++; });
+  document.querySelector("input").addEventListener("input", () => setTimeout(() => { document.querySelector("button").disabled = false; }, 2200));
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, true);
+  assert.equal(submits, 1);
+  window.close();
+});
+
+test("a verification button mounted after input is awaited within its form", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"></form>');
+  let submits = 0;
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); submits++; });
+  document.querySelector("input").addEventListener("input", () => setTimeout(() => {
+    document.querySelector("form").insertAdjacentHTML("beforeend", '<button>로그인</button>');
+  }, 600));
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, true);
+  assert.equal(submits, 1);
+  window.close();
+});
+
+test("formless login controls beside a wrapped OTP input can be activated", async () => {
+  const { window, document, fields } = fixture('<section><label><input placeholder="인증번호"></label><button>인증번호 재전송</button><button id="login">로그인</button></section>');
+  let clicks = 0;
+  document.getElementById("login").addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, true);
+  assert.equal(clicks, 1);
+  window.close();
+});
+
+test("SMS completion ignores alternative passkey, password, email and QR login buttons", async () => {
+  const { window, document, fields } = fixture('<section><label><input placeholder="인증번호"></label><button id="login">로그인</button>'
+    + ['패스키 로그인', '비밀번호 로그인', '이메일 로그인', 'QR코드 로그인', 'Sign in with passkey'].map(text => `<button class="alternative">${text}</button>`).join('') + '</section>');
+  let clicks = 0, alternatives = 0;
+  document.getElementById("login").addEventListener("click", () => clicks++);
+  document.querySelectorAll(".alternative").forEach(button => button.addEventListener("click", () => alternatives++));
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.submitted, true);
+  assert.equal(clicks, 1);
+  assert.equal(alternatives, 0);
+  window.close();
+});
+
+test("formless completion does not reach past another OTP widget to find a login button", async () => {
+  const { window, document, fields } = fixture('<section><label><input id="selected" autocomplete="one-time-code"></label><input autocomplete="one-time-code"><button>로그인</button></section>');
+  let clicks = 0;
+  const input = document.getElementById("selected");
+  input.focus();
+  document.addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, false);
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("newly introduced payment controls prevent automatic submission while a button is pending", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button disabled>확인</button></form>');
+  let clicks = 0;
+  document.addEventListener("click", () => clicks++);
+  document.querySelector("input").addEventListener("input", () => setTimeout(() => {
+    document.querySelector("button").disabled = false;
+    document.querySelector("form").insertAdjacentHTML("beforeend", '<input aria-label="금액" value="10000">');
+  }, 150));
+  const result = await fields.complete(target(document, fields), "123456");
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, false);
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("cancellation from a focus handler prevents the code from being inserted", async () => {
+  const { window, document, fields } = fixture('<input autocomplete="one-time-code">');
+  let current = true;
+  document.querySelector("input").addEventListener("focus", () => { current = false; });
+  const result = await fields.complete(target(document, fields), "123456", () => current);
+  assert.equal(result.success, false);
+  assert.equal(document.querySelector("input").value, "");
+  window.close();
+});
+
 function bridge(html) {
   const item = fixture(html);
   const { window } = item;
@@ -244,5 +423,29 @@ test("a consent result received before browser visibility resumes waits for the 
   assert.equal(ports[0].messages.find(message => message.type === "fields").automatic, "0");
   await ports[0].deliver({ ...base, type: "fill", field: "0", code: "123456" });
   assert.equal(document.querySelector("input").value, "123456");
+  window.close();
+});
+
+test("approved SMS waits for a field that mounts more than two seconds later", async () => {
+  const { window, document, ports, base } = bridge('<form><button type="button">인증번호 발송</button><button>로그인</button></form>');
+  const scanning = ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  setTimeout(() => document.querySelector("form").insertAdjacentHTML("afterbegin", '<input autocomplete="one-time-code">'), 2200);
+  await scanning;
+  assert.equal(ports[0].messages.find(message => message.type === "fields").automatic, "0");
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.equal(document.querySelector("input").value, "001234");
+  assert.equal(ports[0].messages.find(message => message.type === "filled").submitted, true);
+  window.close();
+});
+
+test("cancelling a scan prevents late-mounted inputs from receiving the previous code", async () => {
+  const { window, document, ports, base } = bridge('<form><button type="button">인증번호 발송</button></form>');
+  const scanning = ports[0].deliver({ ...base, type: "scan", code: "123456" });
+  await ports[0].deliver({ ...base, type: "cancel" });
+  document.querySelector("form").insertAdjacentHTML("afterbegin", '<input autocomplete="one-time-code">');
+  await scanning;
+  assert.equal(ports[0].messages.some(message => message.type === "fields"), false);
+  assert.equal(document.querySelector("input").value, "");
   window.close();
 });
