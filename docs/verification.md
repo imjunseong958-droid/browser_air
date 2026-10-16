@@ -2,6 +2,17 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## SMS consent recovery — 17 October 2026
+
+The extension now waits up to ten seconds for the foreground OTP widget, checks that inserted values survive controlled-input updates, and retries a cleared/replaced widget once within its original form/group. It waits up to eight seconds for completion and a unique verification button, including nearby buttons in formless layouts. User edits and request cancellation stop completion; ambiguous or sensitive actions remain manual. Native response timeouts allow fifteen seconds per phase and show the approved code in a short-lived fallback dialog instead of silently losing it. A filled code without a submission attempt prompts the user to finish on the site. A button click is a verification attempt, not a claim that login succeeded.
+
+- **37 JavaScript field/bridge tests**, **76 Java unit tests** (51 navigation/Firebase, 14 update, 11 SMS parser), and **10 release-publication tests** passed. Regressions cover synchronous/asynchronous resets, repeated rejection, replaced widgets, user-edited values, cancellation, delayed widgets/buttons, formless controls, alternative login methods, and payment controls introduced while waiting.
+- **37 Android 15 / API 35 emulator integration tests** passed (30 browser/SMS, seven updater), including approved-result recovery across pause/resume, a field enabled three seconds after requesting SMS, a verification button enabled 2.5 seconds after input, replacement-field recovery, and manual fallback after repeated rejection. Initial runs were interrupted by unrelated system-app ANR dialogs; the successful run used a fresh ARM64 Pixel 7 AVD.
+- Debug and optimized unsigned release APKs built; both Lint variants reported zero errors. Both packaged SMS scripts match the final sources, and actual APK metadata contains no SMS read/receive/send permission. Local logs are under `.tools/sms-consent-recovery-*` (ignored by Git).
+- The built-in extension version advances to **2.3** so installed profiles refresh the scripts. SMS receive/read/send permissions are still absent.
+
+This change follows a reported Coupang login failure. The public phone-login entry was inspected, but the post-SMS Coupang page, real carrier delivery, account login, and the affected physical phone were not exercised. These tests do not establish that the particular Coupang flow is resolved.
+
 ## Task boundaries and one-message consent — 15 October 2026
 
 The current implementation replaces the earlier direct-SMS behavior described below. All supported Android versions use Google Play services SMS User Consent, and the production manifest has no SMS receive/read/send permission.

@@ -420,6 +420,35 @@ public final class BrowserIntegrationTest {
         assertNull(pendingSms());
     }
 
+    @Test public void smsApprovedMessageWaitsForLateEnabledFieldAndButton() {
+        open(server.url("/sms-delayed"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        text("인증번호 발송").click();
+        receiveSms(request, "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        assertNull(pendingSms());
+    }
+
+    @Test public void smsReplacedInputIsRetriedWithinTheApprovedForm() {
+        open(server.url("/sms-replaced"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        assertNull(pendingSms());
+    }
+
+    @Test public void smsRejectedInputShowsFallbackInsteadOfClaimingSuccess() {
+        open(server.url("/sms-rejected"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("인증번호를 직접 입력해 주세요");
+        assertNull(pendingSms());
+        assertFalse(device.hasObject(By.text("OTP_SUBMITTED_001234")));
+        text("확인").click();
+        text("문자 자동 로그인 켜짐 · 끄기");
+    }
+
     @Test public void smsMalformedBroadcastDoesNotInterruptWaiting() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
@@ -533,12 +562,21 @@ public final class BrowserIntegrationTest {
                                 : (route.equals("/sms-choice") ? "<label for='phone'>전화번호</label><input type='tel' id='phone'>" : "")
                                     + "<label for='otp'>인증번호</label><input id='otp' "
                                     + (route.equals("/sms-choice") ? "inputmode='numeric'" : "autocomplete='one-time-code'") + ">";
+                        String setup = route.equals("/sms-delayed")
+                                ? "document.getElementById('otp').disabled=true;document.querySelector('#verify button').disabled=true;"
+                                    + "document.getElementById('verify').insertAdjacentHTML('beforeend','<button type=\"button\" id=\"send\">인증번호 발송</button>');"
+                                    + "document.getElementById('send').addEventListener('click',()=>setTimeout(()=>document.getElementById('otp').disabled=false,3000));"
+                                    + "document.getElementById('otp').addEventListener('input',()=>setTimeout(()=>document.querySelector('#verify button').disabled=false,2500));"
+                                : route.equals("/sms-replaced")
+                                    ? "document.getElementById('otp').addEventListener('input',()=>setTimeout(()=>{document.getElementById('otp').outerHTML=\"<input id='otp' autocomplete='one-time-code'>\"},20),{once:true});"
+                                : route.equals("/sms-rejected")
+                                    ? "document.getElementById('otp').addEventListener('input',e=>setTimeout(()=>e.target.value='',20));" : "";
                         content = "<h1>SMS_FIXTURE</h1><form id='verify'>" + fields + "<button>VERIFY_OTP</button></form>"
                                 + "<p id='status'>OTP_WAITING</p><p id='phone-status'></p><script>"
                                 + "document.getElementById('otp')?.addEventListener('input',e=>document.getElementById('status').textContent='OTP_VALUE_'+e.target.value);"
                                 + "document.getElementById('phone')?.addEventListener('input',()=>document.getElementById('phone-status').textContent='PHONE_CHANGED');"
                                 + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED_'+[...document.querySelectorAll('#verify input:not(#phone)')].map(i=>i.value).join('')});"
-                                + "</script>";
+                                + setup + "</script>";
                     }
                     else if (route.equals("/inside")) content = "<h1>INSIDE_PAGE</h1><a href='" + other + "'>OTHER_SITE_LINK</a>"
                             + "<a target='_blank' href='" + other + "'>OTHER_SITE_POPUP</a>";

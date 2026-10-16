@@ -3,7 +3,7 @@
   const otp = /one[\s_-]*time|\botp\b|verification|verify|security[\s_-]*code|auth(?:entication)?[\s_-]*code|sms[\s_-]*code|passcode|\bcode\b|인증|보안\s*(?:번호|코드)|확인\s*(?:번호|코드)/i;
   const unrelated = /phone|mobile|telephone|email|postal|zip|coupon|promo|amount|전화|휴대폰|이메일|우편|쿠폰|금액/i;
   const action = /verify|confirm|continue|sign[\s_-]*in|log[\s_-]*in|submit|next|인증|확인|로그인|계속|다음/i;
-  const otherAction = /resend|send|request|cancel|back|pay|purchase|delete|transfer|withdraw|보내|전송|발송|요청|재전송|받기|취소|이전|결제|구매|삭제|송금|이체|출금/i;
+  const otherAction = /resend|send|request|cancel|back|pay|purchase|delete|transfer|withdraw|passkey|password|e[ -]?mail|\bqr\b|보내|전송|발송|요청|재전송|받기|취소|이전|결제|구매|삭제|송금|이체|출금|패스키|비밀번호|이메일/i;
   const marked = input => (input.getAttribute("autocomplete") || "")
     .toLowerCase().split(/\s+/).includes("one-time-code");
   const label = input => {
@@ -71,45 +71,95 @@
     return { targets: ordered.slice(0, 8), automatic };
   }
 
-  function fill(target, code) {
+  function fill(target, code, current = () => true) {
     if (!/^[A-Za-z0-9]{4,10}$/.test(code) || !/[0-9]/.test(code) || !target?.inputs?.length) return false;
     const inputs = target.inputs;
-    if (inputs.some(input => !usable(input) || (input.type === "number" && !/^[0-9]+$/.test(code)))) return false;
+    if (!current() || inputs.some(input => !usable(input) || (input.type === "number" && !/^[0-9]+$/.test(code)))) return false;
     if (inputs.length > 1 ? inputs.length !== code.length : inputs[0].maxLength >= 0 && inputs[0].maxLength < code.length) return false;
+    inputs[0].focus({ preventScroll: true });
+    // Focus handlers can replace the widget or change its contents.
+    if (!current() || inputs.some(input => !usable(input))) return false;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     // Set the entire split code first, so the last digit's handler sees a complete value.
     inputs.forEach((input, index) => setter.call(input, inputs.length === 1 ? code : code[index]));
     inputs.forEach(input => {
-      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: input.value }));
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
     return inputs.map(input => input.value).join("") === code;
   }
 
+  function completionScope(target) {
+    const first = target?.inputs?.[0];
+    if (!first) return null;
+    if (first.form) return first.form;
+    const group = target?.container?.closest('[role="group"], fieldset');
+    if (group) return group;
+    // Formless logins often wrap the input in a label and put the button beside it.
+    let parent = target?.container?.parentElement;
+    for (let depth = 0; parent && parent !== first.ownerDocument.body && depth < 4; depth++, parent = parent.parentElement) {
+      if (controls(parent).some(control => visible(control) && isAction(control))) {
+        const otherOtp = [...parent.querySelectorAll("input")].some(input => structural(input)
+          && identified(input) && !target.inputs.includes(input));
+        if (!otherOtp) return parent;
+        break;
+      }
+    }
+    return target?.container?.parentElement;
+  }
+
   async function complete(target, code, current = () => true) {
     const first = target?.inputs?.[0];
     const form = first?.form;
-    const scope = form || (target?.container?.closest('[role="group"], fieldset') || target?.container?.parentElement);
+    const scope = completionScope(target);
     const sensitive = /payment|checkout|transfer|withdraw|purchase|delete|결제|송금|이체|출금|구매|삭제/i;
-    const sensitiveForm = scope && (sensitive.test([scope.id, scope.getAttribute("name"), scope.getAttribute("aria-label")].join(" "))
+    const sensitiveForm = () => scope && (sensitive.test([scope.id, scope.getAttribute("name"), scope.getAttribute("aria-label")].join(" "))
       || controls(scope).some(control => sensitive.test(controlText(control)))
       || [...scope.querySelectorAll("input")].some(input => visible(input) && /amount|금액/i.test(hint(input))));
-    let submitted = false;
+    let submitted = false, edited = false, retried = false, stable = 0;
+    let active = target;
+    const retained = () => active.inputs.every(input => structural(input))
+      && active.inputs.map(input => input.value).join("") === code;
+    const changed = () => active.inputs.some((input, index) => input.isConnected && input.value !== ""
+      && input.value !== (active.inputs.length === 1 ? code : code[index]));
+    const observeEdit = event => { if (event.isTrusted && scope?.contains(event.target)) edited = true; };
     const observeSubmit = () => { submitted = true; };
     const observeClick = event => { if (event.target.closest?.('button, input[type="submit"], input[type="button"], [role="button"]') && isAction(event.target.closest('button, input[type="submit"], input[type="button"], [role="button"]'))) submitted = true; };
     form?.addEventListener("submit", observeSubmit, true);
     scope?.addEventListener("click", observeClick, true);
+    first?.ownerDocument.addEventListener("input", observeEdit, true);
+    first?.ownerDocument.addEventListener("change", observeEdit, true);
     try {
-      if (!current() || !fill(target, code)) return { success: false, submitted: false };
-      // Give controlled forms time to enable their button, and sites time to auto-submit on input.
-      for (let attempt = 0; attempt < 20; attempt++) {
+      if (!current() || !active?.inputs?.length || !/^[A-Za-z0-9]{4,10}$/.test(code) || !/[0-9]/.test(code)) {
+        return { success: false, submitted: false };
+      }
+      if (active.inputs.some(input => input.value !== "")) return { success: false, submitted: false };
+      fill(active, code, current);
+      // Wait for controlled inputs to settle before clicking, and for delayed buttons to enable.
+      for (let attempt = 0; attempt < 80; attempt++) {
         await new Promise(resolve => setTimeout(resolve, 100));
+        if (!current() || edited) return { success: false, submitted: false };
         if (submitted) return { success: true, submitted: true };
-        if (!current() || target.inputs.some(input => !usable(input, false))
-            || target.inputs.map(input => input.value).join("") !== code) break;
-        if (!scope || !target.identified || sensitiveForm || (form && !form.checkValidity())) break;
+        if (!retained()) {
+          if (retried || changed() || !target.identified || !scope?.isConnected) return { success: false, submitted: false };
+          // Retry only an empty, uniquely identified widget in the original form/group.
+          const replacement = scan(first.ownerDocument, code).automatic;
+          const sameInputs = replacement?.inputs.length === active.inputs.length
+            && replacement.inputs.every((input, index) => input === active.inputs[index]);
+          if (replacement && replacement.inputs.every(input => scope.contains(input))
+              && (sameInputs || scope !== first.ownerDocument.body)) {
+            active = replacement;
+            retried = true;
+            stable = 0;
+            fill(active, code, current);
+          }
+          continue;
+        }
+        if (++stable < 3) continue;
+        if (!scope || !target.identified || sensitiveForm() || (form && !form.checkValidity())) break;
         const candidates = controls(scope).filter(element => visible(element) && isAction(element)
           && (!form || !element.form || element.form === form));
+        if (candidates.length === 0 && form) continue;
         if (candidates.length !== 1) break;
         const button = candidates[0];
         if (button.disabled || button.getAttribute("aria-disabled") === "true" || scope.getAttribute("aria-busy") === "true") continue;
@@ -117,10 +167,12 @@
         button.click();
         return { success: true, submitted: true };
       }
-      return { success: true, submitted };
+      return { success: current() && !edited && retained(), submitted };
     } finally {
       form?.removeEventListener("submit", observeSubmit, true);
       scope?.removeEventListener("click", observeClick, true);
+      first?.ownerDocument.removeEventListener("input", observeEdit, true);
+      first?.ownerDocument.removeEventListener("change", observeEdit, true);
     }
   }
 
