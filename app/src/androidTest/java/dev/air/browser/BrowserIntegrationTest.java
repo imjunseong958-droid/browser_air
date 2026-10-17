@@ -7,6 +7,10 @@ import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import androidx.lifecycle.Lifecycle;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -246,6 +250,16 @@ public final class BrowserIntegrationTest {
         return request.get();
     }
 
+    private void awaitSmsComplete() {
+        // The page's submit event precedes the extension's post-submit value check.
+        long end = SystemClock.elapsedRealtime() + 5_000;
+        while (SystemClock.elapsedRealtime() < end) {
+            if (pendingSms() == null) return;
+            SystemClock.sleep(50);
+        }
+        fail("SMS completion was not acknowledged");
+    }
+
     private Object startSms() {
         awaitSmsButton();
         text("문자 자동 로그인 켜기").click();
@@ -321,7 +335,7 @@ public final class BrowserIntegrationTest {
         assertNull(pendingSms());
         receiveSms(startSms(), "[AIR] 인증번호 001234");
         text("OTP_SUBMITTED_001234");
-        assertNull(pendingSms());
+        awaitSmsComplete();
     }
 
     @Test public void smsLabelledFieldIsChosenAutomaticallyWithoutTouchingPhone() {
@@ -417,7 +431,7 @@ public final class BrowserIntegrationTest {
         text("SMS_FIXTURE");
         receiveSms(startSms(), "인증번호 001234");
         text("OTP_SUBMITTED_001234");
-        assertNull(pendingSms());
+        awaitSmsComplete();
     }
 
     @Test public void smsApprovedMessageWaitsForLateEnabledFieldAndButton() {
@@ -427,7 +441,7 @@ public final class BrowserIntegrationTest {
         text("인증번호 발송").click();
         receiveSms(request, "인증번호 001234");
         text("OTP_SUBMITTED_001234");
-        assertNull(pendingSms());
+        awaitSmsComplete();
     }
 
     @Test public void smsReplacedInputIsRetriedWithinTheApprovedForm() {
@@ -435,7 +449,7 @@ public final class BrowserIntegrationTest {
         text("SMS_FIXTURE");
         receiveSms(startSms(), "인증번호 001234");
         text("OTP_SUBMITTED_001234");
-        assertNull(pendingSms());
+        awaitSmsComplete();
     }
 
     @Test public void smsRejectedInputShowsFallbackInsteadOfClaimingSuccess() {
@@ -447,6 +461,58 @@ public final class BrowserIntegrationTest {
         assertFalse(device.hasObject(By.text("OTP_SUBMITTED_001234")));
         text("확인").click();
         text("문자 자동 로그인 켜짐 · 끄기");
+    }
+
+    @Test public void smsUnlabelledCodeBesideNameIsFilledWithoutChoosingAfterRequestButtonDisappears() {
+        open(server.url("/sms-unlabelled"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        text("인증번호 발송").click();
+        SystemClock.sleep(300);
+        assertSame(request, pendingSms());
+        receiveSms(request, "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        assertFalse(device.hasObject(By.text("NAME_CHANGED")));
+        assertFalse(device.hasObject(By.text("인증번호 입력칸을 선택해 주세요")));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsRejectedSyntheticInputRecoversThroughAndroidKeyboardWithoutChoosing() {
+        open(server.url("/sms-native"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        assertFalse(device.hasObject(By.text("인증번호 입력칸을 선택해 주세요")));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsIgnoredSyntheticInputRecoversWhenValueStaysButButtonIsDisabled() {
+        open(server.url("/sms-native-retained"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        scenario.onActivity(activity -> {
+            InputConnection connection = ((GeckoView) activity.findViewById(R.id.geckoView)).getSession()
+                    .getTextInput().onCreateInputConnection(new EditorInfo());
+            assertNotNull(connection);
+            Handler editor = connection.getHandler();
+            assertNotNull(editor);
+            assertNotEquals(Looper.getMainLooper(), editor.getLooper());
+        });
+        receiveSms(request, "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        awaitSmsComplete();
+    }
+
+    @Test public void smsVerificationClickThatRejectsCodeShowsFallback() {
+        open(server.url("/sms-click-rejected"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("인증번호를 직접 입력해 주세요");
+        assertNull(pendingSms());
+        text("확인").click();
+        text("OTP_REJECTED");
     }
 
     @Test public void smsMalformedBroadcastDoesNotInterruptWaiting() {
@@ -489,7 +555,7 @@ public final class BrowserIntegrationTest {
         assertEquals("CODES", member(request, "phase").toString());
         scenario.moveToState(Lifecycle.State.RESUMED);
         text("OTP_SUBMITTED_001234");
-        assertNull(pendingSms());
+        awaitSmsComplete();
     }
 
     @Test public void smsMismatchedConsentMessageEndsTheOneMessageRequest() {
@@ -559,6 +625,7 @@ public final class BrowserIntegrationTest {
                     String content;
                     if (route.startsWith("/sms")) {
                         String fields = route.equals("/sms-split") ? "<div aria-label='인증번호'><input maxlength='1' autocomplete='one-time-code'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'></div>"
+                                : route.equals("/sms-unlabelled") ? "<input id='verificationName' placeholder='이름'><input id='entry' placeholder='--' maxlength='6'><button type='button' id='send' onclick='this.remove()'>인증번호 발송</button>"
                                 : (route.equals("/sms-choice") ? "<label for='phone'>전화번호</label><input type='tel' id='phone'>" : "")
                                     + "<label for='otp'>인증번호</label><input id='otp' "
                                     + (route.equals("/sms-choice") ? "inputmode='numeric'" : "autocomplete='one-time-code'") + ">";
@@ -570,12 +637,22 @@ public final class BrowserIntegrationTest {
                                 : route.equals("/sms-replaced")
                                     ? "document.getElementById('otp').addEventListener('input',()=>setTimeout(()=>{document.getElementById('otp').outerHTML=\"<input id='otp' autocomplete='one-time-code'>\"},20),{once:true});"
                                 : route.equals("/sms-rejected")
-                                    ? "document.getElementById('otp').addEventListener('input',e=>setTimeout(()=>e.target.value='',20));" : "";
+                                    ? "document.getElementById('otp').addEventListener('input',e=>setTimeout(()=>e.target.value='',20));"
+                                : route.equals("/sms-native")
+                                    ? "document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');"
+                                        + "document.getElementById('otp').addEventListener('input',e=>{if(!e.isTrusted)e.target.value='';else document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'});"
+                                : route.equals("/sms-native-retained")
+                                    ? "document.getElementById('otp').focus();document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');document.querySelector('#verify button').disabled=true;"
+                                        + "document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){document.querySelector('#verify button').disabled=false;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
+                                : route.equals("/sms-click-rejected")
+                                    ? "document.querySelector('#verify button').addEventListener('click',()=>setTimeout(()=>{document.getElementById('otp').value='';document.getElementById('status').textContent='OTP_REJECTED'},20));"
+                                : route.equals("/sms-unlabelled")
+                                    ? "document.getElementById('verificationName').addEventListener('input',()=>document.getElementById('phone-status').textContent='NAME_CHANGED');" : "";
                         content = "<h1>SMS_FIXTURE</h1><form id='verify'>" + fields + "<button>VERIFY_OTP</button></form>"
                                 + "<p id='status'>OTP_WAITING</p><p id='phone-status'></p><script>"
                                 + "document.getElementById('otp')?.addEventListener('input',e=>document.getElementById('status').textContent='OTP_VALUE_'+e.target.value);"
                                 + "document.getElementById('phone')?.addEventListener('input',()=>document.getElementById('phone-status').textContent='PHONE_CHANGED');"
-                                + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED_'+[...document.querySelectorAll('#verify input:not(#phone)')].map(i=>i.value).join('')});"
+                                + "document.getElementById('verify').addEventListener('submit',e=>{e.preventDefault();document.getElementById('status').textContent='OTP_SUBMITTED_'+[...document.querySelectorAll('#verify input:not(#phone):not(#verificationName)')].map(i=>i.value).join('')});"
                                 + setup + "</script>";
                     }
                     else if (route.equals("/inside")) content = "<h1>INSIDE_PAGE</h1><a href='" + other + "'>OTHER_SITE_LINK</a>"

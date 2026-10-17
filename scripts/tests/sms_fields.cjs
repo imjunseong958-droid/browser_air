@@ -449,3 +449,169 @@ test("cancelling a scan prevents late-mounted inputs from receiving the previous
   assert.equal(document.querySelector("input").value, "");
   window.close();
 });
+
+
+test("an OTP hint selects the code automatically without touching the name field", () => {
+  for (const attributes of ['name="verificationCode"', 'autocomplete="one-time-code"']) {
+    const { window, document, fields } = fixture(`<form><input placeholder="이름"><input ${attributes}><button>로그인</button></form>`);
+    document.querySelector('input:last-of-type').focus();
+    const result = fields.scan(document, "001234");
+    assert.equal(result.automatic.inputs[0], document.querySelector("input:last-of-type"));
+    assert.equal(result.targets.length, 2);
+    window.close();
+  }
+});
+
+test("phone-prefixed code identifiers are detected automatically", () => {
+  const { window, document, fields } = fixture('<form><input placeholder="이름"><input name="mobileAuthCode"><button>로그인</button></form>');
+  const result = fields.scan(document, "001234");
+  assert.equal(result.automatic.inputs[0].name, "mobileAuthCode");
+  assert.equal(result.targets.length, 2);
+  assert.equal(fields.label(result.targets.find(item => item.inputs[0].name === "mobileAuthCode")), "");
+  window.close();
+});
+
+test("the bridge automatically selects a phone-prefixed code control beside a name field", async () => {
+  const { window, document, ports, base } = bridge('<form><input placeholder="이름"><input name="mobileAuthCode"><button type="button">인증번호 발송</button><button>로그인</button></form>');
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const choices = ports[0].messages.find(message => message.type === "fields");
+  assert.equal(choices.automatic, "0");
+  assert.equal(choices.fields.length, 2);
+  const selected = choices.fields.find(item => item.label === "");
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  await ports[0].deliver({ ...base, type: "fill", field: selected.id, code: "001234" });
+  assert.equal(document.querySelector('[placeholder="이름"]').value, "");
+  assert.equal(document.querySelector('[name="mobileAuthCode"]').value, "001234");
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, true);
+  window.close();
+});
+
+test("a verification click that clears the code cannot report a successful fill", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button type="button">로그인</button></form>');
+  document.querySelector("button").addEventListener("click", () => setTimeout(() => { document.querySelector("input").value = ""; }, 20));
+  const result = await fields.complete(target(document, fields), "001234");
+  assert.equal(result.success, false);
+  assert.equal(result.submitted, true);
+  assert.equal(document.querySelector("input").value, "");
+  window.close();
+});
+
+test("a submission fired after input rejection cannot bypass value verification", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  document.querySelector("input").addEventListener("input", () => {
+    document.querySelector("input").value = "";
+    document.querySelector("form").requestSubmit();
+  });
+  assert.equal((await fields.complete(target(document, fields), "001234")).success, false);
+  window.close();
+});
+
+test("approved SMS infers an unnamed code widget beside a name without choosing", async () => {
+  const { window, document, ports, base } = bridge('<form><input id="verificationName" placeholder="이름"><input placeholder="--" maxlength="6"><button>로그인</button></form>');
+  assert.equal(target(document, window.AirSmsFields), null);
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const choices = ports[0].messages.find(message => message.type === "fields");
+  assert.equal(choices.automatic, "0");
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  await ports[0].deliver({ ...base, type: "fill", field: choices.automatic, code: "001234" });
+  assert.equal(document.getElementById("verificationName").value, "");
+  assert.equal(document.querySelector('[placeholder="--"]').value, "001234");
+  assert.equal(ports[0].messages.find(message => message.type === "filled").submitted, true);
+  window.close();
+});
+
+test("approved SMS cannot infer personal, phone or coupon fields or resolve two unknown controls", () => {
+  for (const html of ['<input id="verificationName" placeholder="이름" maxlength="6">', '<input placeholder="휴대폰번호" id="verificationPhone" maxlength="6">',
+    '<input name="couponCode" maxlength="6">', '<input name="captchaAnswer" maxlength="6">',
+    '<input name="password" maxlength="6">', '<input name="birthDate" maxlength="8">', '<input maxlength="6"><input maxlength="6">']) {
+    const { window, document, fields } = fixture(html);
+    assert.equal(target(document, fields, "001234"), null);
+    window.close();
+  }
+});
+
+test("the bridge requests Android input once when a site rejects synthetic insertion", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  document.querySelector("input").addEventListener("input", event => { if (!event.isTrusted) event.target.value = ""; });
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const filling = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  for (let attempt = 0; attempt < 20 && !ports[0].messages.some(message => message.type === "input"); attempt++) await tick(50);
+  assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
+  assert.equal(document.activeElement, document.querySelector("input"));
+  assert.equal(document.activeElement.value, "");
+  await ports[0].deliver({ ...base, request: "wrong", type: "input-result", success: true });
+  assert.equal(ports[0].messages.some(message => message.type === "filled"), false);
+  // Model only the engine's accepted value; trusted-event behavior is covered in Gecko instrumentation.
+  document.querySelector("input").value = "001234";
+  await ports[0].deliver({ ...base, type: "input-result", success: true });
+  await filling;
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, true);
+  assert.equal(JSON.stringify(ports[0].messages).includes("001234"), false);
+  window.close();
+});
+
+test("cancellation while Android recovery is pending discards its late response", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const filling = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  for (let attempt = 0; attempt < 20 && !ports[0].messages.some(message => message.type === "input"); attempt++) await tick(50);
+  assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
+  await ports[0].deliver({ ...base, type: "cancel" });
+  await ports[0].deliver({ ...base, type: "input-result", success: true });
+  await filling;
+  assert.equal(ports[0].messages.some(message => message.type === "filled"), false);
+  assert.equal(document.querySelector("input").value, "");
+  window.close();
+});
+
+test("a retained value with an ignored input event retries automatically through Android", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button disabled>Verify</button></form>');
+  document.querySelector("form").addEventListener("submit", event => event.preventDefault());
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const filling = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  for (let attempt = 0; attempt < 40 && !ports[0].messages.some(message => message.type === "input"); attempt++) await tick(50);
+  assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
+  assert.equal(document.querySelector("input").value, "001234");
+  document.querySelector("button").disabled = false;
+  await ports[0].deliver({ ...base, type: "input-result", success: true });
+  await filling;
+  assert.equal(ports[0].messages.find(message => message.type === "filled").submitted, true);
+  window.close();
+});
+
+test("hidden or edited controls cannot receive Android recovery", () => {
+  const { window, document, fields } = fixture('<input autocomplete="one-time-code">');
+  const selected = target(document, fields);
+  document.querySelector("input").value = "001234";
+  assert.equal(fields.canRecover(selected, "001234"), true);
+  document.querySelector("input").value = "12";
+  assert.equal(fields.canRecover(selected, "001234"), false);
+  document.querySelector("input").value = "";
+  document.querySelector("input").hidden = true;
+  assert.equal(fields.canRecover(selected, "001234"), false);
+  window.close();
+});
+
+test("a retained code with an unresponsive verification button never claims completion", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button disabled>Verify</button></form>');
+  let recovery = 0;
+  const result = await fields.complete(target(document, fields), "001234", () => true, () => { recovery++; return false; });
+  assert.equal(recovery, 1);
+  assert.equal(result.success, false);
+  assert.equal(result.submitted, false);
+  assert.equal(document.querySelector("input").value, "001234");
+  window.close();
+});
+
+test("a verification attempt that removes its widget ends without claiming the value is still filled", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); event.target.remove(); });
+  const result = await fields.complete(target(document, fields), "001234");
+  assert.equal(result.submitted, true);
+  assert.equal(result.success, false);
+  assert.equal(result.departed, true);
+  window.close();
+});

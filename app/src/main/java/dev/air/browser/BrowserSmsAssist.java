@@ -9,6 +9,8 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import android.widget.Button;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
@@ -66,6 +68,8 @@ final class BrowserSmsAssist {
         Phase phase = Phase.WAITING;
         SmsCodeParser.Codes codes;
         String code;
+        boolean nativeInputUsed;
+        volatile boolean cancelled;
         Request(Page page, String url, long sequence) {
             this.page = page; this.url = url; this.document = page.document;
             id = Long.toString(sequence); expires = SystemClock.elapsedRealtime() + WAIT_MS;
@@ -220,7 +224,8 @@ final class BrowserSmsAssist {
             if ((!page.hasTarget && hasTarget) || (!page.emptyTarget && emptyTarget)) page.completed = false;
             page.emptyTarget = emptyTarget;
             page.hasTarget = hasTarget;
-            if (pending != null && pending.page == page && !hasTarget && pending.phase == Phase.WAITING) cancel();
+            // Keep the consent window across same-document transitions to an unlabelled OTP widget.
+            // Navigation, backgrounding and the five-minute expiry still cancel it.
             refresh();
             return;
         }
@@ -229,14 +234,18 @@ final class BrowserSmsAssist {
                 || !request.id.equals(message.optString("request"))
                 || !request.document.equals(message.optString("document"))
                 || !request.url.equals(message.optString("href"))) return;
-        if (type.equals("fields") && request.phase == Phase.SCANNING) chooseField(request, message);
+        if (type.equals("input") && request.phase == Phase.FILLING) input(request);
+        else if (type.equals("fields") && request.phase == Phase.SCANNING) chooseField(request, message);
         else if (type.equals("filled") && request.phase == Phase.FILLING) {
             boolean success = message.optBoolean("success");
-            if (!success) showFallback(request);
+            // A submitted SPA can remove/hide its widget without navigating. End quietly;
+            // disappearance does not prove that input or account verification succeeded.
+            boolean departed = message.optBoolean("submitted") && message.optBoolean("departed");
+            if (!success && !departed) showFallback(request);
             else {
                 page.completed = true;
                 cancel();
-                if (!message.optBoolean("submitted")) toast(R.string.sms_filled_manual);
+                if (success && !message.optBoolean("submitted")) toast(R.string.sms_filled_manual);
             }
         }
     }
@@ -312,6 +321,49 @@ final class BrowserSmsAssist {
         expireResponse(request, Phase.FILLING);
     }
 
+    private void input(Request request) {
+        if (request.nativeInputUsed || !SmsCodeParser.valid(request.code)) { inputResult(request, false); return; }
+        request.nativeInputUsed = true;
+        String code = request.code;
+        try {
+            InputConnection connection = activity.smsSession().getTextInput().onCreateInputConnection(new EditorInfo());
+            if (connection == null) { inputResult(request, false); return; }
+            // Software keyboards can move Gecko's editor off the UI thread.
+            Handler editor = connection.getHandler();
+            (editor == null ? handler : editor).post(() -> {
+                boolean inserted = false;
+                try {
+                    if (request.cancelled || request.expires <= SystemClock.elapsedRealtime()) return;
+                    CharSequence before = connection.getTextBeforeCursor(11, 0);
+                    CharSequence selected = connection.getSelectedText(0);
+                    CharSequence after = connection.getTextAfterCursor(11, 0);
+                    // Do not overwrite an edit that arrived after the extension checked the field.
+                    if (!request.cancelled && before != null && after != null) {
+                        String existing = before.toString() + (selected == null ? "" : selected.toString()) + after;
+                        if (existing.isEmpty()) {
+                            inserted = connection.commitText(code, 1);
+                        } else if (existing.equals(code) && connection.setSelection(0, existing.length())) {
+                            // Identical replacements can suppress input events. Clear only our code.
+                            inserted = !request.cancelled && connection.commitText("", 1)
+                                    && !request.cancelled && connection.commitText(code, 1);
+                        }
+                    }
+                } catch (RuntimeException ignored) { }
+                boolean accepted = inserted;
+                handler.post(() -> {
+                    if (current(request) && resumed && request.phase == Phase.FILLING) inputResult(request, accepted);
+                });
+            });
+        } catch (RuntimeException ignored) { inputResult(request, false); }
+    }
+
+    private void inputResult(Request request, boolean inserted) {
+        try {
+            request.page.port.postMessage(new JSONObject().put("type", "input-result").put("request", request.id)
+                    .put("document", request.document).put("href", request.url).put("success", inserted));
+        } catch (JSONException | RuntimeException ignored) { showFallback(request); }
+    }
+
     private void post(Request request, String type, String field) {
         try {
             JSONObject message = new JSONObject().put("type", type).put("request", request.id)
@@ -354,6 +406,7 @@ final class BrowserSmsAssist {
 
     private void cancel() {
         if (pending != null) {
+            pending.cancelled = true;
             try {
                 pending.page.port.postMessage(new JSONObject().put("type", "cancel").put("request", pending.id)
                         .put("document", pending.document).put("href", pending.url));
