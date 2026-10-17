@@ -7,6 +7,10 @@ import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputConnection;
 import androidx.lifecycle.Lifecycle;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -486,7 +490,16 @@ public final class BrowserIntegrationTest {
     @Test public void smsIgnoredSyntheticInputRecoversWhenValueStaysButButtonIsDisabled() {
         open(server.url("/sms-native-retained"));
         text("SMS_FIXTURE");
-        receiveSms(startSms(), "인증번호 001234");
+        Object request = startSms();
+        scenario.onActivity(activity -> {
+            InputConnection connection = ((GeckoView) activity.findViewById(R.id.geckoView)).getSession()
+                    .getTextInput().onCreateInputConnection(new EditorInfo());
+            assertNotNull(connection);
+            Handler editor = connection.getHandler();
+            assertNotNull(editor);
+            assertNotEquals(Looper.getMainLooper(), editor.getLooper());
+        });
+        receiveSms(request, "인증번호 001234");
         text("OTP_SUBMITTED_001234");
         text("NATIVE_INPUT_ACCEPTED");
         awaitSmsComplete();
@@ -629,7 +642,7 @@ public final class BrowserIntegrationTest {
                                     ? "document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');"
                                         + "document.getElementById('otp').addEventListener('input',e=>{if(!e.isTrusted)e.target.value='';else document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'});"
                                 : route.equals("/sms-native-retained")
-                                    ? "document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');document.querySelector('#verify button').disabled=true;"
+                                    ? "document.getElementById('otp').focus();document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');document.querySelector('#verify button').disabled=true;"
                                         + "document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){document.querySelector('#verify button').disabled=false;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
                                 : route.equals("/sms-click-rejected")
                                     ? "document.querySelector('#verify button').addEventListener('click',()=>setTimeout(()=>{document.getElementById('otp').value='';document.getElementById('status').textContent='OTP_REJECTED'},20));"

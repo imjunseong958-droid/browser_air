@@ -69,6 +69,7 @@ final class BrowserSmsAssist {
         SmsCodeParser.Codes codes;
         String code;
         boolean nativeInputUsed;
+        volatile boolean cancelled;
         Request(Page page, String url, long sequence) {
             this.page = page; this.url = url; this.document = page.document;
             id = Long.toString(sequence); expires = SystemClock.elapsedRealtime() + WAIT_MS;
@@ -321,29 +322,42 @@ final class BrowserSmsAssist {
     }
 
     private void input(Request request) {
-        boolean inserted = false;
-        if (!request.nativeInputUsed && SmsCodeParser.valid(request.code)) {
-            request.nativeInputUsed = true;
-            try {
-                InputConnection connection = activity.smsSession().getTextInput().onCreateInputConnection(new EditorInfo());
-                if (connection != null) {
+        if (request.nativeInputUsed || !SmsCodeParser.valid(request.code)) { inputResult(request, false); return; }
+        request.nativeInputUsed = true;
+        String code = request.code;
+        try {
+            InputConnection connection = activity.smsSession().getTextInput().onCreateInputConnection(new EditorInfo());
+            if (connection == null) { inputResult(request, false); return; }
+            // Software keyboards can move Gecko's editor off the UI thread.
+            Handler editor = connection.getHandler();
+            (editor == null ? handler : editor).post(() -> {
+                boolean inserted = false;
+                try {
+                    if (request.cancelled || request.expires <= SystemClock.elapsedRealtime()) return;
                     CharSequence before = connection.getTextBeforeCursor(11, 0);
                     CharSequence selected = connection.getSelectedText(0);
                     CharSequence after = connection.getTextAfterCursor(11, 0);
                     // Do not overwrite an edit that arrived after the extension checked the field.
-                    if (before != null && after != null) {
+                    if (!request.cancelled && before != null && after != null) {
                         String existing = before.toString() + (selected == null ? "" : selected.toString()) + after;
                         if (existing.isEmpty()) {
-                            inserted = connection.commitText(request.code, 1);
-                        } else if (existing.equals(request.code) && connection.setSelection(0, existing.length())) {
-                            // Gecko can suppress an identical replacement. Remove only our exact
-                            // code first so the following commit produces a real input event.
-                            inserted = connection.commitText("", 1) && connection.commitText(request.code, 1);
+                            inserted = connection.commitText(code, 1);
+                        } else if (existing.equals(code) && connection.setSelection(0, existing.length())) {
+                            // Identical replacements can suppress input events. Clear only our code.
+                            inserted = !request.cancelled && connection.commitText("", 1)
+                                    && !request.cancelled && connection.commitText(code, 1);
                         }
                     }
-                }
-            } catch (RuntimeException ignored) { }
-        }
+                } catch (RuntimeException ignored) { }
+                boolean accepted = inserted;
+                handler.post(() -> {
+                    if (current(request) && resumed && request.phase == Phase.FILLING) inputResult(request, accepted);
+                });
+            });
+        } catch (RuntimeException ignored) { inputResult(request, false); }
+    }
+
+    private void inputResult(Request request, boolean inserted) {
         try {
             request.page.port.postMessage(new JSONObject().put("type", "input-result").put("request", request.id)
                     .put("document", request.document).put("href", request.url).put("success", inserted));
@@ -392,6 +406,7 @@ final class BrowserSmsAssist {
 
     private void cancel() {
         if (pending != null) {
+            pending.cancelled = true;
             try {
                 pending.page.port.postMessage(new JSONObject().put("type", "cancel").put("request", pending.id)
                         .put("document", pending.document).put("href", pending.url));

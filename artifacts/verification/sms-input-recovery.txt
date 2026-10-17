@@ -8,6 +8,8 @@ Passed:
 - 76 Java unit tests (51 navigation/Firebase, 14 updater, 11 SMS parser)
 - 23 Android 15 / API 35 SMS/permission cases: 21 in the complete run, then
   two timing assertions updated for the post-submit acknowledgement and rerun
+- Both native recovery paths repeated using the editor handler, including a
+  forced background input thread; queued writes honor request cancellation
 - 10 release-publication regressions
 - Debug and optimized unsigned release builds; both Lint variants: zero errors
 - Packaged scripts match source in both APKs; no SMS read/receive/send permissions
