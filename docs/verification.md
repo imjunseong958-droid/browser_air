@@ -2,6 +2,24 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## SMS automatic input recovery — 18 October 2026
+
+The reported flow should remain automatic after Google's per-message Allow. The earlier field chooser is retained only for ambiguous cases. No SMS permission or consent behavior changes.
+
+The detector excludes personal name fields even when their identifiers contain authentication words, recognizes phone-prefixed code identifiers, and uses the approved-message context to infer one otherwise unnamed or length-limited code control. Phone, password, CAPTCHA, birth-date and coupon fields remain excluded from that inference. A request-code button disappearing within the same document no longer discards the active consent window.
+
+A single rejected input is automatically retried through GeckoView's Android input connection. This also handles a value that stays visible while the site ignores synthetic events and leaves the verification button disabled. Both the extension and Android editor check the value before retrying; other user input is preserved. For an unchanged code, the editor removes only that exact code before recommitting it, because an identical replacement can suppress input events. Recovery stays in the original document/form, runs once, and is cancelled on navigation/backgrounding. The native acknowledgement is never taken as proof of successful input: completion reads the live control and checks it after a verification click as well. If submission removes or hides the OTP widget, AIR ends quietly without claiming that login succeeded. Codes are not logged or copied to the clipboard. Extension version **2.4** refreshes installed profiles.
+
+Five new regression cases fail against the previous main-branch scripts: phone-prefixed detection/bridge selection, unnamed fields beside a name field, a click that clears the code, and a submission fired after rejection. These are reproducible compatibility failures; they do not establish the exact DOM of the user's post-SMS Coupang screen.
+
+Validation completed locally:
+
+- **50 JavaScript field/bridge tests**, **76 Java unit tests** (51 navigation/Firebase, 14 update, 11 SMS parser), and **10 release-publication tests** passed.
+- **23 Android 15 / API 35 SMS and permission cases** passed, including both native keyboard recovery paths, unnamed inputs beside a name, consent denial, stale/wrong-host messages, pause/resume and split fields. Two timing assertions were updated to await the new post-submit acknowledgement and rerun successfully.
+- Debug and optimized unsigned release APKs built; both Lint variants reported zero errors. Both APKs contain the exact checked SMS sources and declare no SMS read/receive/send permissions.
+
+The public Coupang phone-login entry was inspected without credentials or requesting a message. The post-SMS Coupang page, carrier delivery, real account login and the affected physical phone remain untested.
+
 ## SMS consent recovery — 17 October 2026
 
 The extension now waits up to ten seconds for the foreground OTP widget, checks that inserted values survive controlled-input updates, and retries a cleared/replaced widget once within its original form/group. It waits up to eight seconds for completion and a unique verification button, including nearby buttons in formless layouts. User edits and request cancellation stop completion; ambiguous or sensitive actions remain manual. Native response timeouts allow fifteen seconds per phase and show the approved code in a short-lived fallback dialog instead of silently losing it. A filled code without a submission attempt prompts the user to finish on the site. A button click is a verification attempt, not a claim that login succeeded.

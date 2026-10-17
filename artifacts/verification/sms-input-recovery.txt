@@ -1,0 +1,23 @@
+AIR automatic SMS input recovery — 18 October 2026 (Asia/Seoul)
+
+Google SMS User Consent / per-message Allow remains required. No SMS permissions.
+Extension version: 2.4.
+
+Passed:
+- 50 JavaScript field/bridge regressions
+- 76 Java unit tests (51 navigation/Firebase, 14 updater, 11 SMS parser)
+- 23 Android 15 / API 35 SMS/permission cases: 21 in the complete run, then
+  two timing assertions updated for the post-submit acknowledgement and rerun
+- 10 release-publication regressions
+- Debug and optimized unsigned release builds; both Lint variants: zero errors
+- Packaged scripts match source in both APKs; no SMS read/receive/send permissions
+
+New engine checks include unnamed OTP beside a name, disappearance of the request
+button, rejected synthetic input, retained-but-ignored input, Android keyboard
+recovery with trusted input events, and rejection after a verification click.
+Five regressions fail against the previous main-branch scripts.
+
+The initial reused emulator stalled during activity transitions. Final engine
+checks used a fresh ARM64 Pixel 7 AVD. Local logs: .tools/sms-field-selection-*.
+The public Coupang entry was inspected without requesting SMS or using credentials.
+Real Coupang login, carrier delivery and the affected physical phone are untested.

@@ -7,6 +7,30 @@
   let observer;
   let scheduled;
   let lastState;
+  let nativeInput;
+
+  function cancelInput() {
+    nativeInput?.(false);
+    nativeInput = null;
+  }
+
+  async function recoverInput(target, code, current) {
+    // Split widgets retain the grouped DOM retry. Native recovery is one focused control.
+    if (target.inputs.length !== 1) return AirSmsFields.fill(target, code, current);
+    const input = target.inputs[0];
+    const eligible = () => current() && document.activeElement === input && AirSmsFields.canRecover(target, code);
+    input.focus({ preventScroll: true });
+    // Let Gecko update its Android editor connection after focus before committing text.
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (!eligible() || nativeInput) return false;
+    return new Promise(resolve => {
+      const timeout = setTimeout(() => finish(false), 2000);
+      const finish = success => { clearTimeout(timeout); nativeInput = null; resolve(success); };
+      nativeInput = finish;
+      try { port.postMessage({ type: "input", request: requestId, document: documentId, href: location.href }); }
+      catch { finish(false); }
+    });
+  }
 
   function reportState(type = "state") {
     if (!port) return;
@@ -29,7 +53,7 @@
     port = browser.runtime.connectNative("air_sms");
     const connected = port;
     connected.onDisconnect.addListener(() => {
-      if (port === connected) { port = null; fields.clear(); requestId = null; observer?.disconnect(); clearTimeout(scheduled); }
+      if (port === connected) { port = null; cancelInput(); fields.clear(); requestId = null; observer?.disconnect(); clearTimeout(scheduled); }
     });
     connected.onMessage.addListener(async message => {
       if (!message || message.document !== documentId || message.href !== location.href) return;
@@ -38,7 +62,11 @@
         && message.document === documentId && message.href === location.href;
       const current = () => bound() && document.visibilityState === "visible";
       if (message.type === "cancel") {
-        if (message.request === requestId) { requestId = null; fields.clear(); }
+        if (message.request === requestId) { requestId = null; cancelInput(); fields.clear(); }
+        return;
+      }
+      if (message.type === "input-result") {
+        if (current()) nativeInput?.(message.success === true);
         return;
       }
       if (message.type === "scan") {
@@ -61,7 +89,7 @@
         });
       } else if (message.type === "fill") {
         reply.type = "filled";
-        Object.assign(reply, current() ? await AirSmsFields.complete(fields.get(message.field), message.code, current)
+        Object.assign(reply, current() ? await AirSmsFields.complete(fields.get(message.field), message.code, current, recoverInput)
           : { success: false, submitted: false });
         if (!current()) return;
         fields.clear(); requestId = null;
@@ -83,6 +111,7 @@
     const connected = port;
     port = null;
     requestId = null;
+    cancelInput();
     observer?.disconnect();
     clearTimeout(scheduled);
     if (connected) connected.disconnect();
