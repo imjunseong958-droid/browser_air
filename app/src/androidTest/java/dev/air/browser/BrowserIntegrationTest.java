@@ -515,6 +515,42 @@ public final class BrowserIntegrationTest {
         text("OTP_REJECTED");
     }
 
+    @Test public void smsPhoneRequestTransitionsToWrappedOtpAndSubmitsAcceptedInput() {
+        open(server.url("/sms-phone-step"));
+        text("SMS_PHONE_STEP");
+        Object request = startSms();
+        text("인증번호 발송").click();
+        text("SMS_CODE_STEP");
+        assertSame(request, pendingSms());
+        receiveSms(request, "[쿠팡] 인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        assertFalse(device.hasObject(By.text("PHONE_CHANGED")));
+        assertFalse(device.hasObject(By.text("인증번호 입력칸을 선택해 주세요")));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsNativeInputIsUsedEvenWhenLoginButtonAlreadyEnabled() {
+        open(server.url("/sms-native-enabled"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        assertFalse(device.hasObject(By.text("SITE_DID_NOT_ACCEPT_INPUT")));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsWithoutLoginButtonReportsIncompleteInsteadOfClaimingInput() {
+        open(server.url("/sms-no-button"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "인증번호 001234");
+        text("자동 로그인을 완료하지 못했어요");
+        assertFalse(device.hasObject(By.text("인증번호를 입력했어요. 사이트의 확인 또는 로그인 버튼을 눌러 주세요.")));
+        assertFalse(device.hasObject(By.text("OTP_SUBMITTED_001234")));
+        awaitSmsComplete();
+        text("확인").click();
+    }
+
     @Test public void smsMalformedBroadcastDoesNotInterruptWaiting() {
         open(server.url("/sms"));
         text("SMS_FIXTURE");
@@ -623,7 +659,21 @@ public final class BrowserIntegrationTest {
                     }
                     String other = "http://127.0.0.1:" + socket.getLocalPort() + "/outside";
                     String content;
-                    if (route.startsWith("/sms")) {
+                    if (route.equals("/sms-phone-step")) {
+                        // The phone input/label shape was observed on Coupang's public entry page.
+                        // The post-SMS widget models a controlled formless login; no service account is used.
+                        content = "<h1>SMS_PHONE_STEP</h1><section id='steps'><label>🇰🇷+82<input type='tel' placeholder='휴대폰번호' value='01000000000'></label>"
+                                + "<button id='send'>인증번호 발송</button></section><p id='status'></p><p id='native-status'></p><p id='phone-status'></p>"
+                                + "<script>document.querySelector('input').addEventListener('input',()=>document.getElementById('phone-status').textContent='PHONE_CHANGED');"
+                                + "document.getElementById('send').onclick=function(){this.remove();document.querySelector('h1').textContent='SMS_CODE_STEP';"
+                                + "document.getElementById('steps').insertAdjacentHTML('beforeend',\"<div><div><div><label>03:00<input id='otp' type='tel' placeholder='인증번호 6자리' maxlength='6'></label></div></div></div><button id='login'>로그인</button>\");"
+                                + "let accepted='';document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){accepted=e.target.value;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
+                                + "document.getElementById('login').onclick=()=>document.getElementById('status').textContent=accepted?'OTP_SUBMITTED_'+accepted:'SITE_DID_NOT_ACCEPT_INPUT'};</script>";
+                    }
+                    else if (route.equals("/sms-no-button")) {
+                        content = "<h1>SMS_FIXTURE</h1><section><input placeholder='인증번호' maxlength='6'></section>";
+                    }
+                    else if (route.startsWith("/sms")) {
                         String fields = route.equals("/sms-split") ? "<div aria-label='인증번호'><input maxlength='1' autocomplete='one-time-code'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'><input maxlength='1'></div>"
                                 : route.equals("/sms-unlabelled") ? "<input id='verificationName' placeholder='이름'><input id='entry' placeholder='--' maxlength='6'><button type='button' id='send' onclick='this.remove()'>인증번호 발송</button>"
                                 : (route.equals("/sms-choice") ? "<label for='phone'>전화번호</label><input type='tel' id='phone'>" : "")
@@ -644,6 +694,10 @@ public final class BrowserIntegrationTest {
                                 : route.equals("/sms-native-retained")
                                     ? "document.getElementById('otp').focus();document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');document.querySelector('#verify button').disabled=true;"
                                         + "document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){document.querySelector('#verify button').disabled=false;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
+                                : route.equals("/sms-native-enabled")
+                                    ? "let accepted='';document.body.insertAdjacentHTML('beforeend','<p id=\"native-status\"></p>');"
+                                        + "document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){accepted=e.target.value;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
+                                        + "document.getElementById('verify').addEventListener('submit',e=>{if(!accepted){e.preventDefault();e.stopImmediatePropagation();document.getElementById('status').textContent='SITE_DID_NOT_ACCEPT_INPUT'}},true);"
                                 : route.equals("/sms-click-rejected")
                                     ? "document.querySelector('#verify button').addEventListener('click',()=>setTimeout(()=>{document.getElementById('otp').value='';document.getElementById('status').textContent='OTP_REJECTED'},20));"
                                 : route.equals("/sms-unlabelled")

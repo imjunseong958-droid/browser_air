@@ -2,6 +2,26 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Phone-to-code transitions and incomplete-login reporting — 18 October 2026
+
+The reported failure happens after Android's per-message Allow, while AIR says the code was entered. The public Coupang phone-login entry was inspected again without entering a phone number or requesting SMS. Its input is wrapped in a label containing `🇰🇷+82`, while `휴대폰번호` is only in the placeholder. The first ancestor containing its sibling buttons is the fifth ancestor; the previous formless completion search stopped after four. These observations concern the public phone-entry screen, not the authenticated post-SMS screen.
+
+Detection now combines labels, referenced accessibility labels and placeholders, excludes phone-entry controls from both automatic and manual code candidates, and rechecks the purpose before insertion. Formless completion searches up to eight wrappers and excludes buttons owned by another form. Other OTP widgets, ambiguous actions, and sensitive controls still stop automatic submission. Text/label changes update the bridge state.
+
+Single identified OTP controls use the Android editor before attempting verification. Previously native input was tried only after a DOM reset or while a button stayed disabled; a controlled page could retain a synthetic DOM value and have an enabled button while ignoring the input. Unavailable/rejected native insertion retains bounded DOM fallback. The native acknowledgement alone cannot establish success, user edits remain protected, and live values are checked after submission. If no verification button can be activated, a short-lived incomplete-login dialog replaces the misleading “인증번호를 입력했어요” toast. Extension version **2.5** refreshes installed profiles.
+
+Regression fixtures reproduce the wrapped phone entry, transition to a newly mounted code widget, five-level button ancestry, a form whose enabled login button accepts only trusted input, and missing verification controls. Six regression cases fail against the earlier implementation, covering hidden hints, phone candidates, repurposed inputs, ignored synthetic input, and button scope. The post-SMS Coupang fixture is a model of these failure conditions, not a captured service page.
+
+On the identical nested-button fixture, previous main returns `{success: true, submitted: false}`, which selected the misleading entered-code toast. The fix returns `{success: true, submitted: true}`. A separate instrumented missing-button case checks the incomplete-login dialog.
+
+Validation completed locally:
+
+- **60 JavaScript tests**, **76 Java unit tests**, and **10 publication tests** passed.
+- **26 Android 15 / API 35 SMS and permission cases** passed across the batch and an isolated retry. The batch passed 25/26; the existing ambiguous-code case timed out starting its receive window, then passed in isolation without changes. All three new cases passed: wrapped phone-to-code transition with five-level button ancestry, native input before an enabled login button, and the incomplete-login dialog.
+- Debug and optimized unsigned release APKs built; both Lint variants reported zero errors. Both APKs contain the exact final SMS sources, and release metadata declares no SMS read/receive/send permission.
+
+Real post-SMS Coupang login, carrier delivery and the affected physical phone remain unverified. Evidence is recorded in `artifacts/verification/coupang-sms-stages.txt`; local detailed logs are under `.tools/coupang-sms-*` (ignored by Git).
+
 ## SMS automatic input recovery — 18 October 2026
 
 The reported flow should remain automatic after Google's per-message Allow. The earlier field chooser is retained only for ambiguous cases. No SMS permission or consent behavior changes.

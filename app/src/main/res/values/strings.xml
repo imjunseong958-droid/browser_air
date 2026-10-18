@@ -72,7 +72,8 @@
     <string name="sms_unavailable">문자 자동 입력에는 Google Play 서비스가 필요해요. 인증번호를 직접 입력해 주세요.</string>
     <string name="sms_filling">문자 인증 진행 중 · 끄기</string>
     <string name="sms_waiting_field">문자 허용됨 · 입력칸 기다리는 중 · 끄기</string>
-    <string name="sms_filled_manual">인증번호를 입력했어요. 사이트의 확인 또는 로그인 버튼을 눌러 주세요.</string>
+    <string name="sms_check_site">자동 로그인을 완료하지 못했어요</string>
+    <string name="sms_check_site_body">사이트에서 인증번호와 확인 또는 로그인 버튼을 확인해 주세요.\n\n인증번호: %1$s</string>
     <string name="sms_start_failed">문자를 기다리지 못했어요. 다시 켜거나 인증번호를 직접 입력해 주세요.</string>
     <string name="sms_timeout">문자 대기 시간이 지났어요. 자동 로그인을 다시 켜고 새 인증 문자를 요청해 주세요.</string>
     <string name="sms_no_code">이 페이지에 사용할 인증번호를 찾지 못했어요. 문자를 확인해 주세요.</string>
