@@ -282,6 +282,27 @@ test("formless login controls beside a wrapped OTP input can be activated", asyn
   window.close();
 });
 
+test("formless login finds a sibling button beyond four decorative input wrappers", async () => {
+  const { window, document, fields } = fixture('<section><div><div><div><label><input placeholder="인증번호"></label></div></div></div>'
+    + '<button id="login">로그인</button><button>패스키 로그인</button></section>');
+  let clicks = 0;
+  document.getElementById("login").addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "001234");
+  assert.equal(result.submitted, true);
+  assert.equal(clicks, 1);
+  window.close();
+});
+
+test("formless completion never borrows a login button belonging to another form", async () => {
+  const { window, document, fields } = fixture('<section><label><input placeholder="인증번호"></label><form><button>로그인</button></form></section>');
+  let clicks = 0;
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); clicks++; });
+  const result = await fields.complete(target(document, fields), "001234");
+  assert.equal(result.submitted, false);
+  assert.equal(clicks, 0);
+  window.close();
+});
+
 test("SMS completion ignores alternative passkey, password, email and QR login buttons", async () => {
   const { window, document, fields } = fixture('<section><label><input placeholder="인증번호"></label><button id="login">로그인</button>'
     + ['패스키 로그인', '비밀번호 로그인', '이메일 로그인', 'QR코드 로그인', 'Sign in with passkey'].map(text => `<button class="alternative">${text}</button>`).join('') + '</section>');
@@ -333,7 +354,7 @@ test("cancellation from a focus handler prevents the code from being inserted", 
   window.close();
 });
 
-function bridge(html) {
+function bridge(html, native = false) {
   const item = fixture(html);
   const { window } = item;
   window.isSecureContext = true;
@@ -341,7 +362,11 @@ function bridge(html) {
   window.browser = { runtime: { connectNative() {
     const messages = [], listeners = [], disconnected = [];
     const port = { messages, onMessage: { addListener: fn => listeners.push(fn) },
-      onDisconnect: { addListener: fn => disconnected.push(fn) }, postMessage: data => messages.push(data),
+      onDisconnect: { addListener: fn => disconnected.push(fn) }, postMessage: data => {
+        messages.push(data);
+        // Most fixtures model a device without a native editor; native cases acknowledge explicitly.
+        if (data.type === "input" && !native) queueMicrotask(() => port.deliver({ ...data, type: "input-result", success: false }));
+      },
       disconnect: () => disconnected.forEach(fn => fn()), deliver: data => Promise.all(listeners.map(fn => fn(data))) };
     ports.push(port);
     return port;
@@ -532,7 +557,7 @@ test("approved SMS cannot infer personal, phone or coupon fields or resolve two 
 });
 
 test("the bridge requests Android input once when a site rejects synthetic insertion", async () => {
-  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>', true);
   document.querySelector("input").addEventListener("input", event => { if (!event.isTrusted) event.target.value = ""; });
   document.querySelector("form").addEventListener("submit", event => event.preventDefault());
   await ports[0].deliver({ ...base, type: "scan", code: "001234" });
@@ -553,7 +578,7 @@ test("the bridge requests Android input once when a site rejects synthetic inser
 });
 
 test("cancellation while Android recovery is pending discards its late response", async () => {
-  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>');
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>Verify</button></form>', true);
   document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
   await ports[0].deliver({ ...base, type: "scan", code: "001234" });
   const filling = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
@@ -567,18 +592,127 @@ test("cancellation while Android recovery is pending discards its late response"
   window.close();
 });
 
-test("a retained value with an ignored input event retries automatically through Android", async () => {
-  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button disabled>Verify</button></form>');
+test("Android input is requested before writing a controlled input with a disabled button", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button disabled>Verify</button></form>', true);
   document.querySelector("form").addEventListener("submit", event => event.preventDefault());
   await ports[0].deliver({ ...base, type: "scan", code: "001234" });
   const filling = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
   for (let attempt = 0; attempt < 40 && !ports[0].messages.some(message => message.type === "input"); attempt++) await tick(50);
   assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
-  assert.equal(document.querySelector("input").value, "001234");
+  assert.equal(document.querySelector("input").value, "");
+  document.querySelector("input").value = "001234";
   document.querySelector("button").disabled = false;
   await ports[0].deliver({ ...base, type: "input-result", success: true });
   await filling;
   assert.equal(ports[0].messages.find(message => message.type === "filled").submitted, true);
+  window.close();
+});
+
+test("decorative wrapping labels cannot hide phone or OTP placeholders", () => {
+  const { window, document, fields } = fixture('<section><label>🇰🇷+82<input type="tel" placeholder="휴대폰번호"></label>'
+    + '<label>03:00<input type="tel" placeholder="인증번호 6자리" maxlength="6"></label><button>로그인</button></section>');
+  const result = fields.scan(document, "001234");
+  assert.equal(result.automatic?.inputs[0].placeholder, "인증번호 6자리");
+  assert.equal(result.targets.length, 1);
+  assert.equal(fields.hasTarget(document), true);
+  window.close();
+});
+
+test("phone entry is never offered as an OTP even with a misleading verification identifier", () => {
+  for (const attributes of ['name="verificationPhone" maxlength="6"', 'autocomplete="tel-national"', 'autocomplete="one-time-code"']) {
+    const { window, document, fields } = fixture(`<label>🇰🇷+82<input type="tel" placeholder="휴대폰번호" ${attributes}></label><button>인증번호 발송</button>`);
+    assert.equal(fields.hasTarget(document), true);
+    assert.equal(fields.scan(document, "001234").targets.length, 0);
+    window.close();
+  }
+});
+
+test("a reused phone control cannot receive the code selected before its purpose changes", () => {
+  const { window, document, fields } = fixture('<input placeholder="인증번호" maxlength="6">');
+  const selected = target(document, fields);
+  document.querySelector("input").placeholder = "휴대폰번호";
+  assert.equal(fields.fill(selected, "001234"), false);
+  assert.equal(fields.canRecover(selected, "001234"), false);
+  assert.equal(document.querySelector("input").value, "");
+  window.close();
+});
+
+test("phone request transitions to a new wrapped OTP widget after message approval", async () => {
+  const { window, document, ports, base } = bridge('<section><label>🇰🇷+82<input type="tel" placeholder="휴대폰번호" value="01000000000"></label>'
+    + '<button>인증번호 발송</button></section>');
+  assert.equal(ports[0].messages[0].emptyTarget, false);
+  const scanning = ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  setTimeout(() => {
+    document.querySelector("button").remove();
+    document.querySelector("section").insertAdjacentHTML("beforeend", '<label>03:00<input placeholder="인증번호 6자리" maxlength="6"></label><button id="login">로그인</button>');
+  }, 150);
+  await scanning;
+  const choice = ports[0].messages.find(message => message.type === "fields");
+  assert.equal(choice.automatic, "0");
+  assert.equal(choice.fields.length, 1);
+  let clicks = 0;
+  document.getElementById("login").addEventListener("click", () => clicks++);
+  await ports[0].deliver({ ...base, type: "fill", field: choice.automatic, code: "001234" });
+  assert.equal(document.querySelector('[placeholder="휴대폰번호"]').value, "01000000000");
+  assert.equal(document.querySelector('[maxlength="6"]').value, "001234");
+  assert.equal(clicks, 1);
+  window.close();
+});
+
+test("native input precedes an enabled login button when synthetic events would be ignored", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>로그인</button></form>');
+  let accepted = "", submitted = "", nativeWrites = 0, syntheticWrites = 0;
+  document.querySelector("input").addEventListener("input", () => syntheticWrites++);
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); submitted = accepted; });
+  const result = await fields.complete(target(document, fields), "001234", () => true, fields.fill, (selected, code) => {
+    nativeWrites++;
+    selected.inputs[0].value = accepted = code;
+    return true;
+  });
+  assert.equal(result.submitted, true);
+  assert.equal(submitted, "001234");
+  assert.equal(nativeWrites, 1);
+  assert.equal(syntheticWrites, 0);
+  window.close();
+});
+
+test("an edit during native insertion is preserved and prevents verification", async () => {
+  const { window, document, fields } = fixture('<form><input autocomplete="one-time-code"><button>로그인</button></form>');
+  let clicks = 0;
+  document.querySelector("button").addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields), "001234", () => true, fields.fill, selected => {
+    selected.inputs[0].value = "12";
+    return false;
+  });
+  assert.equal(result.success, false);
+  assert.equal(document.querySelector("input").value, "12");
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("a referenced OTP label becoming visible to the detector updates the bridge state", async () => {
+  const { window, document, ports } = bridge('<span id="purpose">전화번호</span><input aria-labelledby="purpose">');
+  assert.equal(ports[0].messages[0].hasTarget, false);
+  document.getElementById("purpose").firstChild.data = "인증번호";
+  await tick();
+  assert.equal(ports[0].messages.at(-1).hasTarget, true);
+  assert.equal(ports[0].messages.at(-1).emptyTarget, true);
+  window.close();
+});
+
+test("native acknowledgement without a retained value cannot claim a successful fill", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>로그인</button></form>', true);
+  document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
+  let clicks = 0;
+  document.querySelector("button").addEventListener("click", () => clicks++);
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const work = ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  for (let attempt = 0; attempt < 20 && !ports[0].messages.some(message => message.type === "input"); attempt++) await tick(50);
+  await ports[0].deliver({ ...base, type: "input-result", success: true });
+  await work;
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, false);
+  assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
+  assert.equal(clicks, 0);
   window.close();
 });
 

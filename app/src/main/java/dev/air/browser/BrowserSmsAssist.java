@@ -42,7 +42,7 @@ final class BrowserSmsAssist {
     static final String EXTENSION_ID = "sms-assist@air.local";
     private static final String NATIVE_APP = "air_sms";
     private static final long WAIT_MS = 5 * 60_000;
-    // Each phase allows either the extension's 10-second scan or its 8-second completion wait.
+    // Allow a 10-second scan, or native input acknowledgement plus the 8-second completion wait.
     private static final long RESPONSE_MS = 15_000;
     private enum Phase { STARTING, WAITING, CONSENT, CODES, SCANNING, FIELDS, FILLING }
 
@@ -242,10 +242,10 @@ final class BrowserSmsAssist {
             // disappearance does not prove that input or account verification succeeded.
             boolean departed = message.optBoolean("submitted") && message.optBoolean("departed");
             if (!success && !departed) showFallback(request);
+            else if (success && !message.optBoolean("submitted")) showFallback(request, true);
             else {
                 page.completed = true;
                 cancel();
-                if (success && !message.optBoolean("submitted")) toast(R.string.sms_filled_manual);
             }
         }
     }
@@ -384,12 +384,16 @@ final class BrowserSmsAssist {
     }
 
     private void showFallback(Request request) {
+        showFallback(request, false);
+    }
+
+    private void showFallback(Request request, boolean checkSite) {
         String code = request.code;
         request.page.completed = true;
         cancel();
         if (code == null) { toast(R.string.sms_input_failed); return; }
-        dialog = new AlertDialog.Builder(activity).setTitle(R.string.sms_manual_title)
-                .setMessage(activity.getString(R.string.sms_manual_body, code))
+        dialog = new AlertDialog.Builder(activity).setTitle(checkSite ? R.string.sms_check_site : R.string.sms_manual_title)
+                .setMessage(activity.getString(checkSite ? R.string.sms_check_site_body : R.string.sms_manual_body, code))
                 .setPositiveButton(R.string.okay, (d, which) -> cancel())
                 .setOnCancelListener(d -> cancel()).show();
         // The short-lived dialog closes on navigation, backgrounding or expiry.

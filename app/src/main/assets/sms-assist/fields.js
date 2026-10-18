@@ -6,15 +6,22 @@
   const otherAction = /resend|send|request|cancel|back|pay|purchase|delete|transfer|withdraw|passkey|password|e[ -]?mail|\bqr\b|보내|전송|발송|요청|재전송|받기|취소|이전|결제|구매|삭제|송금|이체|출금|패스키|비밀번호|이메일/i;
   const marked = input => (input.getAttribute("autocomplete") || "")
     .toLowerCase().split(/\s+/).includes("one-time-code");
+  const descriptions = input => [...(input.labels || [])].map(item => item.textContent).concat(
+    (input.getAttribute("aria-labelledby") || "").split(/\s+/).map(id => input.ownerDocument.getElementById(id)?.textContent || ""),
+    input.getAttribute("aria-label") || "", input.getAttribute("placeholder") || "").join(" ");
   const label = input => {
-    const value = [...(input.labels || [])].map(item => item.textContent).join(" ")
-      || input.getAttribute("aria-label") || input.getAttribute("placeholder") || "";
+    const value = descriptions(input);
     return value.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, "")
       .replace(/\s+/g, " ").trim().slice(0, 80);
   };
-  const hint = input => [label(input), input.id, input.name].join(" ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  const hint = input => [descriptions(input), input.id, input.name].join(" ").replace(/([a-z])([A-Z])/g, "$1 $2");
   const personal = /\b(?:(?:first|last|full|real|user)[\s_-]*)?name\b|birth|\bdob\b|이름|성명|생년|생일|주민/i;
   const phoneLabel = /phone|mobile|telephone|전화|휴대폰/i;
+  const codeLabel = /인증\s*(?:번호|코드)|(?:verification|security|authentication)[\s_-]*code|\botp\b|one[\s_-]*time/i;
+  const phoneCode = /(?:phone|mobile|telephone)[\s_-]*(?:(?:auth(?:entication)?|verification|verify)[\s_-]*)?(?:code|otp)/i;
+  const phoneEntry = input => /(?:^|\s)tel(?:-[a-z]+)*(?:\s|$)/i.test(input.getAttribute("autocomplete") || "")
+    || (phoneLabel.test(descriptions(input)) && !codeLabel.test(descriptions(input)))
+    || (phoneLabel.test([input.id, input.name].join(" ")) && !phoneCode.test(hint(input)) && !codeLabel.test(descriptions(input)));
   const visible = element => {
     if (!(element instanceof Element) || !element.isConnected || element.closest("[inert]")) return false;
     for (let node = element; node instanceof Element; node = node.parentElement) {
@@ -26,16 +33,15 @@
   const structural = input => input instanceof HTMLInputElement && visible(input)
     && (["text", "tel", "number"].includes(input.type) || (input.type === "password" && marked(input)));
   const usable = (input, empty = true, allowDisabled = false) => structural(input)
-    && (allowDisabled || !input.disabled) && !input.readOnly && (!empty || input.value === "");
+    && (allowDisabled || !input.disabled) && !input.readOnly && !phoneEntry(input) && (!empty || input.value === "");
   const controls = scope => [...scope.querySelectorAll('button, input[type="submit"], input[type="button"], [role="button"]')];
   const controlText = element => element.getAttribute("aria-label") || (element instanceof HTMLInputElement ? element.value : element.textContent) || "";
   const isAction = element => action.test(controlText(element)) && !otherAction.test(controlText(element));
-  const identified = input => !personal.test(hint(input)) && (marked(input)
+  const identified = input => !phoneEntry(input) && !personal.test(hint(input)) && (marked(input)
     || (otp.test(hint(input)) && (!unrelated.test(hint(input))
       // Code widgets often have names such as mobileAuthCode. A phone label still excludes phone entry.
-      || (!phoneLabel.test(label(input))
-        && /(?:phone|mobile|telephone)[\s_-]*(?:(?:auth(?:entication)?|verification|verify)[\s_-]*)?(?:code|otp)/i.test(hint(input)))
-      || /인증\s*(?:번호|코드)|(?:verification|security|authentication)[\s_-]*code/i.test(label(input))))
+      || (!phoneLabel.test(descriptions(input)) && phoneCode.test(hint(input)))
+      || codeLabel.test(descriptions(input))))
     || (!unrelated.test(hint(input)) && input.maxLength >= 4 && input.maxLength <= 10
       && (input.inputMode === "numeric" || input.type === "tel" || input.type === "number")
       && input.form && controls(input.form).some(control => /verify|인증/i.test(controlText(control)) && isAction(control))));
@@ -114,10 +120,10 @@
     if (first.form) return first.form;
     const group = target?.container?.closest('[role="group"], fieldset');
     if (group) return group;
-    // Formless logins often wrap the input in a label and put the button beside it.
+    // Formless logins can nest label/field/content wrappers before a sibling login button.
     let parent = target?.container?.parentElement;
-    for (let depth = 0; parent && parent !== first.ownerDocument.body && depth < 4; depth++, parent = parent.parentElement) {
-      if (controls(parent).some(control => visible(control) && isAction(control))) {
+    for (let depth = 0; parent && parent !== first.ownerDocument.body && depth < 8; depth++, parent = parent.parentElement) {
+      if (controls(parent).some(control => !control.form && visible(control) && isAction(control))) {
         const otherOtp = [...parent.querySelectorAll("input")].some(input => structural(input)
           && identified(input) && !target.inputs.includes(input));
         if (!otherOtp) return parent;
@@ -127,7 +133,7 @@
     return target?.container?.parentElement;
   }
 
-  async function complete(target, code, current = () => true, recover = fill) {
+  async function complete(target, code, current = () => true, recover = fill, insert = null) {
     const first = target?.inputs?.[0];
     const form = first?.form;
     const scope = completionScope(target);
@@ -137,7 +143,7 @@
       || [...scope.querySelectorAll("input")].some(input => visible(input) && /amount|금액/i.test(hint(input))));
     let submitted = false, submittedWithCode = false, edited = false, retried = false, stable = 0, settled = 0;
     let active = target, nativeRecovery = false, waitingForButton = false;
-    const retained = () => active.inputs.every(input => structural(input))
+    const retained = () => active.inputs.every(input => structural(input) && !phoneEntry(input))
       && active.inputs.map(input => input.value).join("") === code;
     const changed = () => active.inputs.some((input, index) => input.isConnected && input.value !== ""
       && input.value !== (active.inputs.length === 1 ? code : code[index]));
@@ -163,7 +169,14 @@
         return { success: false, submitted: false };
       }
       if (active.inputs.some(input => input.value !== "")) return { success: false, submitted: false };
-      fill(active, code, current);
+      if (insert && active.identified && active.inputs.length === 1) {
+        // A retained DOM value does not mean a controlled site's state accepted a synthetic event.
+        // Use the Android editor before the first verification click, even when the button is enabled.
+        nativeRecovery = true;
+        try { await insert(active, code, current); } finally { nativeRecovery = false; }
+        if (!current() || edited) return { success: false, submitted };
+        if (!retained() && !changed() && !submitted) fill(active, code, current);
+      } else fill(active, code, current);
       // Wait for controlled inputs to settle before clicking, and for delayed buttons to enable.
       for (let attempt = 0; attempt < 80 || (submitted && settled < 5); attempt++) {
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -187,14 +200,14 @@
             retried = true;
             stable = 0;
             nativeRecovery = true;
-            await recover(active, code, current);
+            try { await recover(active, code, current); } finally { nativeRecovery = false; }
           }
           continue;
         }
         if (++stable < 5) continue;
         if (!scope || !target.identified || sensitiveForm() || (form && !form.checkValidity())) break;
         const candidates = controls(scope).filter(element => visible(element) && isAction(element)
-          && (!form || !element.form || element.form === form));
+          && (!element.form || element.form === form));
         const pendingButton = candidates.length === 0 || (candidates.length === 1 && (candidates[0].disabled
           || candidates[0].getAttribute("aria-disabled") === "true" || scope.getAttribute("aria-busy") === "true"));
         waitingForButton = pendingButton && (candidates.length > 0 || !!form);
@@ -202,7 +215,7 @@
           // Some controlled forms leave the DOM value intact but ignore synthetic events.
           retried = true;
           nativeRecovery = true;
-          await recover(active, code, current);
+          try { await recover(active, code, current); } finally { nativeRecovery = false; }
           stable = 0;
           continue;
         }

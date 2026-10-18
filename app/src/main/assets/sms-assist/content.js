@@ -14,7 +14,7 @@
     nativeInput = null;
   }
 
-  async function recoverInput(target, code, current) {
+  async function insertNative(target, code, current) {
     // Split widgets retain the grouped DOM retry. Native recovery is one focused control.
     if (target.inputs.length !== 1) return AirSmsFields.fill(target, code, current);
     const input = target.inputs[0];
@@ -89,7 +89,7 @@
         });
       } else if (message.type === "fill") {
         reply.type = "filled";
-        Object.assign(reply, current() ? await AirSmsFields.complete(fields.get(message.field), message.code, current, recoverInput)
+        Object.assign(reply, current() ? await AirSmsFields.complete(fields.get(message.field), message.code, current, AirSmsFields.fill, insertNative)
           : { success: false, submitted: false });
         if (!current()) return;
         fields.clear(); requestId = null;
@@ -97,8 +97,8 @@
       connected.postMessage(reply);
     });
     observer = new MutationObserver(scheduleState);
-    observer.observe(document.documentElement, { subtree: true, childList: true, attributes: true,
-      attributeFilter: ["autocomplete", "disabled", "readonly", "hidden", "style", "class", "maxlength", "type", "inputmode", "id", "name", "aria-label", "placeholder"] });
+    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true,
+      attributeFilter: ["autocomplete", "disabled", "readonly", "hidden", "style", "class", "maxlength", "type", "inputmode", "id", "name", "aria-label", "aria-labelledby", "placeholder"] });
     reportState("ready");
   }
   connect();
