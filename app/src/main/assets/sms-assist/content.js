@@ -10,7 +10,7 @@
   let nativeInput;
 
   function cancelInput() {
-    nativeInput?.(false);
+    nativeInput?.({ success: false });
     nativeInput = null;
   }
 
@@ -20,16 +20,22 @@
     const input = target.inputs[0];
     const eligible = () => current() && document.activeElement === input && AirSmsFields.canRecover(target, code);
     input.focus({ preventScroll: true });
-    // Let Gecko update its Android editor connection after focus before committing text.
-    await new Promise(resolve => setTimeout(resolve, 100));
-    if (!eligible() || nativeInput) return false;
-    return new Promise(resolve => {
-      const timeout = setTimeout(() => finish(false), 2000);
-      const finish = success => { clearTimeout(timeout); nativeInput = null; resolve(success); };
-      nativeInput = finish;
-      try { port.postMessage({ type: "input", request: requestId, document: documentId, href: location.href }); }
-      catch { finish(false); }
-    });
+    // Consent/focus can outpace Gecko's Android editor. Retry only explicit not-ready
+    // replies; an attempted write or an unacknowledged request must never be repeated.
+    const deadline = performance.now() + 2000;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, attempt === 0 ? 100 : 200));
+      if (!eligible() || nativeInput || performance.now() >= deadline) return false;
+      const result = await new Promise(resolve => {
+        const timeout = setTimeout(() => finish({ success: false }), Math.max(1, deadline - performance.now()));
+        const finish = result => { clearTimeout(timeout); nativeInput = null; resolve(result); };
+        nativeInput = finish;
+        try { port.postMessage({ type: "input", request: requestId, document: documentId, href: location.href }); }
+        catch { finish({ success: false }); }
+      });
+      if (result.success || !result.retry) return result.success;
+    }
+    return false;
   }
 
   function reportState(type = "state") {
@@ -66,7 +72,7 @@
         return;
       }
       if (message.type === "input-result") {
-        if (current()) nativeInput?.(message.success === true);
+        if (current()) nativeInput?.({ success: message.success === true, retry: message.retry === true });
         return;
       }
       if (message.type === "scan") {

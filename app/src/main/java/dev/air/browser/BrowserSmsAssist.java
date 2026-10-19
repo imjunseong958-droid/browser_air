@@ -68,7 +68,9 @@ final class BrowserSmsAssist {
         Phase phase = Phase.WAITING;
         SmsCodeParser.Codes codes;
         String code;
-        boolean nativeInputUsed;
+        volatile boolean nativeInputUsed;
+        boolean nativeInputPending;
+        int nativeInputAttempts;
         volatile boolean cancelled;
         Request(Page page, String url, long sequence) {
             this.page = page; this.url = url; this.document = page.document;
@@ -322,45 +324,55 @@ final class BrowserSmsAssist {
     }
 
     private void input(Request request) {
-        if (request.nativeInputUsed || !SmsCodeParser.valid(request.code)) { inputResult(request, false); return; }
-        request.nativeInputUsed = true;
+        if (request.nativeInputPending) return;
+        if (request.nativeInputUsed || request.nativeInputAttempts >= 10 || !SmsCodeParser.valid(request.code)) {
+            inputResult(request, false, false); return;
+        }
+        request.nativeInputAttempts++;
+        request.nativeInputPending = true;
         String code = request.code;
         try {
             InputConnection connection = activity.smsSession().getTextInput().onCreateInputConnection(new EditorInfo());
-            if (connection == null) { inputResult(request, false); return; }
+            if (connection == null) { inputResult(request, false, true); return; }
             // Software keyboards can move Gecko's editor off the UI thread.
             Handler editor = connection.getHandler();
             (editor == null ? handler : editor).post(() -> {
                 boolean inserted = false;
+                boolean retry = false;
                 try {
                     if (request.cancelled || request.expires <= SystemClock.elapsedRealtime()) return;
                     CharSequence before = connection.getTextBeforeCursor(11, 0);
                     CharSequence selected = connection.getSelectedText(0);
                     CharSequence after = connection.getTextAfterCursor(11, 0);
                     // Do not overwrite an edit that arrived after the extension checked the field.
-                    if (!request.cancelled && before != null && after != null) {
+                    if (before == null || after == null) retry = true;
+                    else if (!request.cancelled) {
                         String existing = before.toString() + (selected == null ? "" : selected.toString()) + after;
                         if (existing.isEmpty()) {
+                            request.nativeInputUsed = true;
                             inserted = connection.commitText(code, 1);
                         } else if (existing.equals(code) && connection.setSelection(0, existing.length())) {
                             // Identical replacements can suppress input events. Clear only our code.
+                            request.nativeInputUsed = true;
                             inserted = !request.cancelled && connection.commitText("", 1)
                                     && !request.cancelled && connection.commitText(code, 1);
                         }
                     }
                 } catch (RuntimeException ignored) { }
                 boolean accepted = inserted;
+                boolean notReady = retry;
                 handler.post(() -> {
-                    if (current(request) && resumed && request.phase == Phase.FILLING) inputResult(request, accepted);
+                    if (current(request) && resumed && request.phase == Phase.FILLING) inputResult(request, accepted, notReady);
                 });
             });
-        } catch (RuntimeException ignored) { inputResult(request, false); }
+        } catch (RuntimeException ignored) { inputResult(request, false, false); }
     }
 
-    private void inputResult(Request request, boolean inserted) {
+    private void inputResult(Request request, boolean inserted, boolean retry) {
+        request.nativeInputPending = false;
         try {
             request.page.port.postMessage(new JSONObject().put("type", "input-result").put("request", request.id)
-                    .put("document", request.document).put("href", request.url).put("success", inserted));
+                    .put("document", request.document).put("href", request.url).put("success", inserted).put("retry", retry));
         } catch (JSONException | RuntimeException ignored) { showFallback(request); }
     }
 

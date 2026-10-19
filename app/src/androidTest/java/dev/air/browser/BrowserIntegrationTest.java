@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputConnection;
+import android.view.inputmethod.InputConnectionWrapper;
 import androidx.lifecycle.Lifecycle;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -31,6 +32,9 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import java.lang.reflect.Proxy;
+import java.lang.reflect.InvocationTargetException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.security.MessageDigest;
@@ -538,6 +542,75 @@ public final class BrowserIntegrationTest {
         text("NATIVE_INPUT_ACCEPTED");
         assertFalse(device.hasObject(By.text("SITE_DID_NOT_ACCEPT_INPUT")));
         awaitSmsComplete();
+    }
+
+    private void delaySmsEditor(long delay, boolean unreadable) {
+        scenario.onActivity(activity -> {
+            try {
+                var input = ((GeckoView) activity.findViewById(R.id.geckoView)).getSession().getTextInput();
+                var field = input.getClass().getDeclaredField("mInputConnection");
+                field.setAccessible(true);
+                Object original = field.get(input);
+                assertNotNull(original);
+                Class<?> contract = Class.forName("org.mozilla.geckoview.SessionTextInput$InputConnectionClient");
+                AtomicLong readyAt = new AtomicLong();
+                field.set(input, Proxy.newProxyInstance(contract.getClassLoader(), new Class<?>[] { contract }, (proxy, method, args) -> {
+                    method.setAccessible(true);
+                    if (method.getName().equals("onCreateInputConnection")) {
+                        readyAt.compareAndSet(0, SystemClock.elapsedRealtime() + delay);
+                        if (SystemClock.elapsedRealtime() < readyAt.get()) {
+                            if (!unreadable) return null;
+                            InputConnection connection = (InputConnection) method.invoke(original, args);
+                            if (connection == null) return null;
+                            return new InputConnectionWrapper(connection, false) {
+                                @Override public CharSequence getTextBeforeCursor(int length, int flags) { return null; }
+                            };
+                        }
+                    }
+                    try { return method.invoke(original, args); }
+                    catch (InvocationTargetException error) { throw error.getCause(); }
+                }));
+            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
+        });
+    }
+
+    @Test public void smsWaitsForAnInitiallyUnavailableAndroidEditor() {
+        open(server.url("/sms-native"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        delaySmsEditor(650, false);
+        receiveSms(request, "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        assertTrue((Integer) member(request, "nativeInputAttempts") > 1);
+        assertEquals(true, member(request, "nativeInputUsed"));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsWaitsForReadableAndroidEditorTextBeforeItsOnlyWrite() {
+        open(server.url("/sms-native"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        delaySmsEditor(650, true);
+        receiveSms(request, "인증번호 001234");
+        text("OTP_SUBMITTED_001234");
+        text("NATIVE_INPUT_ACCEPTED");
+        assertTrue((Integer) member(request, "nativeInputAttempts") > 1);
+        assertEquals(true, member(request, "nativeInputUsed"));
+        awaitSmsComplete();
+    }
+
+    @Test public void smsUnavailableEditorStopsWaitingAndShowsManualFallback() {
+        open(server.url("/sms-native"));
+        text("SMS_FIXTURE");
+        Object request = startSms();
+        delaySmsEditor(30_000, false);
+        receiveSms(request, "인증번호 001234");
+        text("인증번호를 직접 입력해 주세요");
+        assertEquals(false, member(request, "nativeInputUsed"));
+        assertTrue((Integer) member(request, "nativeInputAttempts") <= 10);
+        assertNull(pendingSms());
+        assertFalse(device.hasObject(By.text("OTP_SUBMITTED_001234")));
     }
 
     @Test public void smsWithoutLoginButtonReportsIncompleteInsteadOfClaimingInput() {
