@@ -365,7 +365,8 @@ function bridge(html, native = false) {
       onDisconnect: { addListener: fn => disconnected.push(fn) }, postMessage: data => {
         messages.push(data);
         // Most fixtures model a device without a native editor; native cases acknowledge explicitly.
-        if (data.type === "input" && !native) queueMicrotask(() => port.deliver({ ...data, type: "input-result", success: false }));
+        if (data.type === "input" && typeof native === "function") queueMicrotask(() => native(data, port, window));
+        else if (data.type === "input" && !native) queueMicrotask(() => port.deliver({ ...data, type: "input-result", success: false }));
       },
       disconnect: () => disconnected.forEach(fn => fn()), deliver: data => Promise.all(listeners.map(fn => fn(data))) };
     ports.push(port);
@@ -605,6 +606,97 @@ test("Android input is requested before writing a controlled input with a disabl
   await ports[0].deliver({ ...base, type: "input-result", success: true });
   await filling;
   assert.equal(ports[0].messages.find(message => message.type === "filled").submitted, true);
+  window.close();
+});
+
+test("Android editor readiness retries succeed without synthetic input or duplicate verification", async () => {
+  let requests = 0, ready = false, syntheticWrites = 0, clicks = 0;
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>로그인</button></form>',
+    (data, port, window) => {
+      if (++requests === 1) setTimeout(() => { ready = true; }, 1100);
+      const success = ready;
+      if (success) window.document.querySelector("input").value = "001234";
+      port.deliver({ ...data, type: "input-result", success, retry: !success });
+    });
+  document.querySelector("input").addEventListener("input", event => { syntheticWrites++; event.target.value = ""; });
+  document.querySelector("form").addEventListener("submit", event => { event.preventDefault(); clicks++; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.ok(requests > 1 && requests <= 10);
+  assert.equal(syntheticWrites, 0);
+  assert.equal(clicks, 1);
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, true);
+  window.close();
+});
+
+test("an editor that never becomes ready exhausts its bounded retries and retains manual fallback", async () => {
+  let requests = 0, clicks = 0;
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>로그인</button></form>',
+    (data, port) => { requests++; port.deliver({ ...data, type: "input-result", success: false, retry: true }); });
+  document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
+  document.querySelector("button").addEventListener("click", event => { event.preventDefault(); clicks++; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.ok(requests > 1 && requests <= 10);
+  assert.equal(clicks, 0);
+  assert.equal(document.querySelector("input").value, "");
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, false);
+  window.close();
+});
+
+test("a failed attempted native write is terminal rather than treated as editor readiness", async () => {
+  let requests = 0;
+  const { window, document, ports, base } = bridge('<input autocomplete="one-time-code">',
+    (data, port) => { requests++; port.deliver({ ...data, type: "input-result", success: false, retry: false }); });
+  document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.equal(requests, 1);
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, false);
+  window.close();
+});
+
+test("cancelling between editor readiness retries prevents another native request", async () => {
+  let requests = 0;
+  const { window, document, ports, base } = bridge('<input autocomplete="one-time-code">',
+    async (data, port) => {
+      requests++;
+      await port.deliver({ ...data, type: "input-result", success: false, retry: true });
+      await port.deliver({ ...data, type: "cancel" });
+    });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.equal(requests, 1);
+  assert.equal(document.querySelector("input").value, "");
+  assert.equal(ports[0].messages.some(message => message.type === "filled"), false);
+  window.close();
+});
+
+test("an edit between editor readiness retries is preserved without verification", async () => {
+  let requests = 0, clicks = 0;
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>로그인</button></form>',
+    (data, port, window) => {
+      requests++;
+      port.deliver({ ...data, type: "input-result", success: false, retry: true });
+      window.document.querySelector("input").value = "12";
+    });
+  document.querySelector("button").addEventListener("click", event => { event.preventDefault(); clicks++; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.equal(requests, 1);
+  assert.equal(document.querySelector("input").value, "12");
+  assert.equal(clicks, 0);
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, false);
+  window.close();
+});
+
+test("an unacknowledged native request times out without retrying a possibly queued write", async () => {
+  const { window, document, ports, base } = bridge('<input autocomplete="one-time-code">', true);
+  document.querySelector("input").addEventListener("input", event => { event.target.value = ""; });
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  assert.equal(ports[0].messages.filter(message => message.type === "input").length, 1);
+  assert.equal(ports[0].messages.find(message => message.type === "filled").success, false);
   window.close();
 });
 

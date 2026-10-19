@@ -2,6 +2,22 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Delayed Android editor readiness — 19 October 2026
+
+The reported Coupang failure shows the approved code in AIR's fallback dialog while the site's code field stays empty. A reproducible failure in the input path was found: the extension waited 100 ms after focus, and Android consumed the single native-input attempt before checking whether an input connection existed. A temporarily unavailable editor therefore fell straight back to synthetic DOM input, which a controlled page may reject. This establishes a readiness defect, not the exact cause on the affected phone.
+
+The extension now rechecks the original focused control before each readiness request, waiting at most two seconds and making at most ten requests. Android reports a retry only when the connection or surrounding text is unavailable before any write. Overlapping requests are ignored; an attempted write, a terminal failure or an unacknowledged request is never retried. Cancellation and user-edited values still stop completion. Extension version **2.6** refreshes installed profiles.
+
+Two readiness regression cases fail against the previous main scripts. The new JavaScript cases cover readiness delayed by more than one second, permanent unavailability, terminal write failure, cancellation and edits between retries, and a missing acknowledgement. Android instrumentation wraps the real GeckoView input-connection provider to simulate a 650 ms connection delay or temporarily unreadable surrounding text, then uses the real editor to enter and verify the synthetic code. A permanently unavailable connection retains the manual fallback without attempting a native write.
+
+Validation:
+
+- **66 JavaScript tests**, **76 Java unit tests** and **10 publication tests** passed.
+- All **29 Android 15 / API 35 SMS and permission cases** passed: three new readiness cases and 26 existing regressions. The final readiness batch passed 2/3; its remaining case timed out starting SMS reception before editor injection, then passed in isolation without changes. The earlier readiness batch also passed all three cases.
+- Debug and optimized unsigned release builds and both Lint variants passed. Both APKs contain the final extension scripts; the release APK declares no SMS read/receive/send permission.
+
+Local evidence is under `.tools/sms-editor-*` (ignored by Git). The affected physical phone, carrier SMS and real post-SMS Coupang login remain unverified.
+
 ## Phone-to-code transitions and incomplete-login reporting — 18 October 2026
 
 The reported failure happens after Android's per-message Allow, while AIR says the code was entered. The public Coupang phone-login entry was inspected again without entering a phone number or requesting SMS. Its input is wrapped in a label containing `🇰🇷+82`, while `휴대폰번호` is only in the placeholder. The first ancestor containing its sibling buttons is the fifth ancestor; the previous formless completion search stopped after four. These observations concern the public phone-entry screen, not the authenticated post-SMS screen.
