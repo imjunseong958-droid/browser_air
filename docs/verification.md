@@ -2,6 +2,27 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Coupang mobile split code widget — 20 October 2026
+
+The reported failure occurs after Android's Allow: AIR shows **인증번호를 직접 입력해 주세요**. Earlier fixtures modelled a code widget appearing in the same document. Coupang's login script instead submits a form to a separate document, `/login/otpLogin.pang`, after sending the code. With the user's permission, the user requested a code on their own number in desktop Chrome, and AIR's real detector was run against that page. No code was entered and no login was attempted; the login click was intercepted.
+
+The desktop page uses one `#smsCode` number input (`autocomplete="one-time-code"`). AIR selected it and activated the login button. The page script (`m-sms-login.min.js`) also contains the mobile-web variant enabled by `data-auto-otp`. It has six `.code-digit` number boxes; the first box has `maxlength=6` so a whole autofilled code fits, and its input handler spreads the code across all boxes, then shortens the first box to one digit. AIR treated the first box as a single field and read `"0"` instead of the code after the spread. It reported a rejected value and showed the manual dialog, matching the report. The mobile page itself could not be fetched: Coupang's bot protection refused automated requests.
+
+- Split groups may now start with a box whose `maxlength` covers the whole group. Such a box is no longer offered as a separate single field.
+- If a site moves an inserted code from the first box into its siblings, the group is adopted only when the boxes contain exactly that code, in order.
+- A transparent input marked `one-time-code` over decorative slots is recognized; unmarked transparent inputs remain excluded.
+- After message approval, the unnamed control the site focused can be selected when several unnamed controls exist. Phone, name, password and coupon controls stay excluded.
+- Fallback dialogs append a fixed cause: no code field, value changed by the site, edited, no active button, or no response.
+- Extension version **2.7** refreshes installed profiles.
+
+Validation:
+
+- **75 JavaScript tests** passed. Seven new cases fail against the previous scripts: two Coupang mobile split-widget cases (direct and through the bridge), adoption of a spread code, rejection of a mismatched spread, a transparent overlay input, a site-focused unnamed control, and reported causes. A desktop Coupang fixture built from the observed attributes passes before and after.
+- Gradle unit tests, Lint and debug/test APK builds passed.
+- On an Android 15 / API 35 ARM64 emulator without a hardware keyboard, the previous scripts reproduce the report: all six boxes show the code, the manual dialog appears and login is not activated. With the fix, the complete **41-test browser/SMS integration suite** passed, including the new Coupang split-widget case and the cause shown for rejected input. Details: `artifacts/verification/coupang-split-widget.txt`.
+
+The mobile split-widget fixtures mirror the published page script. The actual mobile markup, carrier SMS and the user's phone remain unverified until the next on-device attempt.
+
 ## Delayed Android editor readiness — 19 October 2026
 
 The reported Coupang failure shows the approved code in AIR's fallback dialog while the site's code field stays empty. A reproducible failure in the input path was found: the extension waited 100 ms after focus, and Android consumed the single native-input attempt before checking whether an input connection existed. A temporarily unavailable editor therefore fell straight back to synthetic DOM input, which a controlled page may reject. This establishes a readiness defect, not the exact cause on the affected phone.

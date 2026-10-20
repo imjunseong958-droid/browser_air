@@ -22,15 +22,17 @@
   const phoneEntry = input => /(?:^|\s)tel(?:-[a-z]+)*(?:\s|$)/i.test(input.getAttribute("autocomplete") || "")
     || (phoneLabel.test(descriptions(input)) && !codeLabel.test(descriptions(input)))
     || (phoneLabel.test([input.id, input.name].join(" ")) && !phoneCode.test(hint(input)) && !codeLabel.test(descriptions(input)));
-  const visible = element => {
+  const visible = (element, transparent = false) => {
     if (!(element instanceof Element) || !element.isConnected || element.closest("[inert]")) return false;
     for (let node = element; node instanceof Element; node = node.parentElement) {
       const style = getComputedStyle(node);
-      if (["hidden", "collapse"].includes(style.visibility) || style.display === "none" || style.opacity === "0") return false;
+      // OTP widgets may lay a transparent one-time-code input over decorative digit boxes.
+      if (["hidden", "collapse"].includes(style.visibility) || style.display === "none"
+        || (style.opacity === "0" && !(transparent && node === element))) return false;
     }
     return [...element.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
   };
-  const structural = input => input instanceof HTMLInputElement && visible(input)
+  const structural = input => input instanceof HTMLInputElement && visible(input, marked(input))
     && (["text", "tel", "number"].includes(input.type) || (input.type === "password" && marked(input)));
   const usable = (input, empty = true, allowDisabled = false) => structural(input)
     && (allowDisabled || !input.disabled) && !input.readOnly && !phoneEntry(input) && (!empty || input.value === "");
@@ -46,6 +48,35 @@
       && (input.inputMode === "numeric" || input.type === "tel" || input.type === "number")
       && input.form && controls(input.form).some(control => /verify|인증/i.test(controlText(control)) && isAction(control))));
 
+  // The first box of a split widget may accept a whole autofilled code before the site spreads it.
+  const digitBox = (item, index, items) => item.maxLength === 1 || (index === 0 && item.maxLength >= items.length
+    && item.maxLength <= 10 && item.type === items[items.length - 1].type);
+
+  function splitGroup(input, allInputs) {
+    // Split widgets may wrap each digit in its own element. Stop at the form boundary.
+    for (let parent = input.parentElement; parent && parent !== input.ownerDocument.body; parent = parent.parentElement) {
+      const siblings = allInputs.filter(item => parent.contains(item));
+      if (siblings.length > 10 || siblings.some((item, index) => !digitBox(item, index, siblings) || item.form !== input.form)) return null;
+      if (siblings.length >= 4) return { inputs: siblings, container: parent };
+      if (parent === input.form) return null;
+    }
+    return null;
+  }
+
+  // Adopt a widget that moved an inserted code from its first box into the following boxes.
+  function spread(input, code) {
+    for (let parent = input.parentElement, depth = 0; parent && parent !== input.ownerDocument.body && depth < 4;
+      parent = parent.parentElement, depth++) {
+      const boxes = [...parent.querySelectorAll("input")].filter(item => structural(item) && item.form === input.form);
+      if (boxes.length > 10) return null;
+      if (boxes.length >= 4 && boxes[0] === input && boxes.map(item => item.value).join("") === code) {
+        return { inputs: boxes, container: parent, identified: true };
+      }
+      if (parent === input.form) return null;
+    }
+    return null;
+  }
+
   function scan(document, code, allowDisabled = false) {
     const allInputs = [...document.querySelectorAll("input")].filter(structural);
     const inputs = allInputs.filter(input => usable(input, true, allowDisabled));
@@ -53,17 +84,7 @@
     const grouped = new Set();
     for (const input of inputs) {
       if (input.maxLength !== 1 || grouped.has(input)) continue;
-      let group = null;
-      // Split widgets may wrap each digit in its own element. Stop at the form boundary.
-      for (let parent = input.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
-        const siblings = allInputs.filter(item => parent.contains(item));
-        if (siblings.length > 10 || siblings.some(item => item.maxLength !== 1 || item.form !== input.form)) break;
-        if (siblings.length >= 4) {
-          group = { inputs: siblings, container: parent };
-          break;
-        }
-        if (parent === input.form) break;
-      }
+      const group = splitGroup(input, allInputs);
       if (!group) continue;
       group.inputs.forEach(item => grouped.add(item));
       if (!group.inputs.every(item => usable(item, true, allowDisabled))) continue;
@@ -73,24 +94,27 @@
       if (group.identified && (!code || group.inputs.length === code.length)) targets.push(group);
     }
     for (const input of inputs) {
-      if (input.maxLength === 1 || (input.maxLength >= 0 && input.maxLength < 4)) continue;
+      if (grouped.has(input) || input.maxLength === 1 || (input.maxLength >= 0 && input.maxLength < 4)) continue;
       if (code && input.maxLength >= 0 && input.maxLength < code.length) continue;
       // Keep ambiguous controls available for the manual fallback.
       if (identified(input) || otp.test(hint(input)) || !unrelated.test(hint(input))) {
         targets.push({ inputs: [input], container: input, identified: identified(input) });
       }
     }
-    // Only after approved SMS scanning, an otherwise unnamed control can be inferred when
-    // all remaining controls are explicitly personal/contact fields. Never infer a name field.
+    // Only after approved SMS scanning, an otherwise unnamed control can be inferred when it is
+    // the one the site focused, or all other controls are explicitly personal/contact fields.
+    // Never infer a name field.
     const possible = targets.filter(target => target.inputs.every(input => !personal.test(hint(input))
       && !unrelated.test(hint(input))));
     const known = targets.filter(target => target.identified);
     const focused = known.filter(target => target.inputs.includes(document.activeElement));
     let automatic = known.length === 1 ? known[0] : focused.length === 1 ? focused[0] : null;
-    if (!known.length && code && possible.length === 1 && possible[0].inputs.every(input =>
-      hint(input).replace(/[\s\-–—_:.*]/g, "") === "" || (input.maxLength >= 4 && input.maxLength <= 10))) {
-      automatic = possible[0];
-      automatic.identified = true;
+    if (!known.length && code) {
+      const focusedGuess = possible.filter(target => target.inputs.includes(document.activeElement));
+      const unnamed = possible.length === 1 && possible[0].inputs.every(input =>
+        hint(input).replace(/[\s\-–—_:.*]/g, "") === "" || (input.maxLength >= 4 && input.maxLength <= 10));
+      automatic = focusedGuess.length === 1 ? focusedGuess[0] : unnamed ? possible[0] : null;
+      if (automatic) automatic.identified = true;
     }
     const ordered = [...targets.filter(target => target.identified), ...targets.filter(target => !target.identified)];
     return { targets: ordered.slice(0, 8), automatic };
@@ -168,28 +192,35 @@
       if (!current() || !active?.inputs?.length || !/^[A-Za-z0-9]{4,10}$/.test(code) || !/[0-9]/.test(code)) {
         return { success: false, submitted: false };
       }
-      if (active.inputs.some(input => input.value !== "")) return { success: false, submitted: false };
+      if (active.inputs.some(input => input.value !== "")) return { success: false, submitted: false, reason: "changed" };
       if (insert && active.identified && active.inputs.length === 1) {
         // A retained DOM value does not mean a controlled site's state accepted a synthetic event.
         // Use the Android editor before the first verification click, even when the button is enabled.
         nativeRecovery = true;
         try { await insert(active, code, current); } finally { nativeRecovery = false; }
-        if (!current() || edited) return { success: false, submitted };
+        if (!current() || edited) return { success: false, submitted, reason: "edited" };
+        if (!retained()) active = spread(active.inputs[0], code) || active;
         if (!retained() && !changed() && !submitted) fill(active, code, current);
       } else fill(active, code, current);
       // Wait for controlled inputs to settle before clicking, and for delayed buttons to enable.
       for (let attempt = 0; attempt < 80 || (submitted && settled < 5); attempt++) {
         await new Promise(resolve => setTimeout(resolve, 100));
-        if (!current() || edited) return { success: false, submitted };
+        if (!current() || edited) return { success: false, submitted, reason: "edited" };
         if (submitted) {
           // A click is only an attempt. Check the live widget after the site's handlers settle.
           // Do not retry or click again after an attempt, including a rejected attempt.
           if (++settled < 5) continue;
-          return { success: submittedWithCode && retained(), submitted: true,
+          return { success: submittedWithCode && retained(), submitted: true, reason: "changed",
             departed: submittedWithCode && (!scope?.isConnected || active.inputs.every(input => !structural(input))) };
         }
         if (!retained()) {
-          if (retried || changed() || !target.identified || !scope?.isConnected) return { success: false, submitted: false };
+          const moved = active.inputs.length === 1 && spread(active.inputs[0], code);
+          if (moved) {
+            active = moved;
+            stable = 0;
+            continue;
+          }
+          if (retried || changed() || !target.identified || !scope?.isConnected) return { success: false, submitted: false, reason: "changed" };
           // Retry only an empty, uniquely identified widget in the original form/group.
           const replacement = scan(first.ownerDocument, code).automatic;
           const sameInputs = replacement?.inputs.length === active.inputs.length
@@ -228,7 +259,8 @@
         submitted = true;
         button.click();
       }
-      return { success: current() && !edited && retained() && !waitingForButton, submitted };
+      return { success: current() && !edited && retained() && !waitingForButton, submitted,
+        reason: edited ? "edited" : retained() ? "button" : "changed" };
     } finally {
       form?.removeEventListener("submit", observeSubmit, true);
       scope?.removeEventListener("click", observeClick, true);
