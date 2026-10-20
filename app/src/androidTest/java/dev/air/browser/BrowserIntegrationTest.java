@@ -461,6 +461,7 @@ public final class BrowserIntegrationTest {
         text("SMS_FIXTURE");
         receiveSms(startSms(), "인증번호 001234");
         text("인증번호를 직접 입력해 주세요");
+        assertNotNull(device.wait(Until.findObject(By.textContains("원인: 사이트가 입력한 번호를 지우거나 바꿨어요")), 5_000));
         assertNull(pendingSms());
         assertFalse(device.hasObject(By.text("OTP_SUBMITTED_001234")));
         text("확인").click();
@@ -517,6 +518,16 @@ public final class BrowserIntegrationTest {
         assertNull(pendingSms());
         text("확인").click();
         text("OTP_REJECTED");
+    }
+
+    @Test public void smsCoupangMobileSplitWidgetFillsEveryBoxAndLogsIn() {
+        open(server.url("/sms-coupang-split"));
+        text("SMS_FIXTURE");
+        receiveSms(startSms(), "[Web발신]\n[쿠팡] 인증번호 [001234]를 입력해주세요.");
+        text("OTP_SUBMITTED_001234");
+        assertFalse(device.hasObject(By.text("인증번호를 직접 입력해 주세요")));
+        assertFalse(device.hasObject(By.text("인증번호 입력칸을 선택해 주세요")));
+        awaitSmsComplete();
     }
 
     @Test public void smsPhoneRequestTransitionsToWrappedOtpAndSubmitsAcceptedInput() {
@@ -742,6 +753,26 @@ public final class BrowserIntegrationTest {
                                 + "document.getElementById('steps').insertAdjacentHTML('beforeend',\"<div><div><div><label>03:00<input id='otp' type='tel' placeholder='인증번호 6자리' maxlength='6'></label></div></div></div><button id='login'>로그인</button>\");"
                                 + "let accepted='';document.getElementById('otp').addEventListener('input',e=>{if(e.isTrusted){accepted=e.target.value;document.getElementById('native-status').textContent='NATIVE_INPUT_ACCEPTED'}});"
                                 + "document.getElementById('login').onclick=()=>document.getElementById('status').textContent=accepted?'OTP_SUBMITTED_'+accepted:'SITE_DID_NOT_ACCEPT_INPUT'};</script>";
+                    }
+                    else if (route.equals("/sms-coupang-split")) {
+                        // Mirrors Coupang's mobile-web code step (m-sms-login.min.js) with data-auto-otp enabled:
+                        // the first number box accepts a whole autofilled code, which the site spreads over six boxes.
+                        StringBuilder digits = new StringBuilder();
+                        for (int i = 0; i < 6; i++) {
+                            digits.append("<input class='code-digit' data-index='").append(i).append("' type='number' inputmode='numeric' style='width:36px'")
+                                    .append(i == 0 ? " autocomplete='one-time-code' maxlength='6'>" : " maxlength='1'>");
+                        }
+                        content = "<h1>SMS_FIXTURE</h1><div id='smsLogin'><div id='verification-code' style='display:flex'>" + digits
+                                + "</div><input id='smsCode' type='hidden'><button id='sendAgain' disabled>재발송</button>"
+                                + "<button id='loginWithSmsCode' disabled>로그인</button><button id='loginLink'>비밀번호로 로그인</button></div>"
+                                + "<p id='status'>OTP_WAITING</p><script>"
+                                + "const boxes=[...document.querySelectorAll('.code-digit')],code=document.getElementById('smsCode'),login=document.getElementById('loginWithSmsCode');"
+                                + "function collect(){let value='',last=0;boxes.forEach((b,i)=>{if(b.value)last=i;value+=b.value});code.value=value;boxes[last].focus();login.disabled=last!==5}"
+                                + "boxes.forEach(b=>b.addEventListener('input',()=>{const v=b.value;"
+                                + "if(v.length===6){if(/^\\d{6}$/.test(v)){boxes[0].setAttribute('maxlength','1');boxes.forEach((d,i)=>d.value=String(Number(v[i])));"
+                                + "code.value=v;login.disabled=false;setTimeout(()=>boxes[5].focus(),300)}}"
+                                + "else if(v.length===1){const d=v.replace(/[^0-9]/g,''),i=Number(b.dataset.index);b.value=d;if(d&&i<5)boxes[i+1].focus();collect()}}));"
+                                + "boxes[0].focus();login.onclick=()=>document.getElementById('status').textContent='OTP_SUBMITTED_'+code.value;</script>";
                     }
                     else if (route.equals("/sms-no-button")) {
                         content = "<h1>SMS_FIXTURE</h1><section><input placeholder='인증번호' maxlength='6'></section>";

@@ -841,3 +841,192 @@ test("a verification attempt that removes its widget ends without claiming the v
   assert.equal(result.departed, true);
   window.close();
 });
+
+// Coupang's mobile-web code step (/login/otpLogin.pang, m-sms-login.min.js 2026-10-19 build) when
+// data-auto-otp is enabled: six number boxes, the first accepting a whole autofilled code. The
+// handlers below mirror that script; the PC variant is a single #smsCode number input instead.
+function coupangSplit() {
+  const digits = Array.from({ length: 6 }, (_, i) => `<input class="code-digit" data-index="${i}" type="number" inputmode="numeric"`
+    + (i === 0 ? ' autocomplete="one-time-code" maxlength="6">' : ' maxlength="1">')).join("");
+  const item = fixture('<div id="smsLogin" class="sms-login" data-phase="VERIFY_CODE"><div class="sms-login__container">'
+    + '<div class="input-row"><div class="input-row"><div id="verification-code">' + digits
+    + '<div class="loading-overlay"><div class="loading-spinner"></div></div></div><input id="smsCode" type="hidden"></div></div>'
+    + '<p>00:59 <button class="send-again" id="sendAgain" disabled>재발송</button></p>'
+    + '<button id="loginWithSmsCode" disabled>로그인</button>'
+    + '<button class="link-btn" id="loginLink"><div>비밀번호로 로그인</div></button></div></div>');
+  const { document } = item;
+  const boxes = [...document.querySelectorAll(".code-digit")], code = document.getElementById("smsCode");
+  const login = document.getElementById("loginWithSmsCode");
+  const collect = () => {
+    let value = "", last = 0;
+    boxes.forEach((box, index) => { if (box.value) last = index; value += box.value; });
+    code.value = value;
+    boxes[last].focus();
+    login.disabled = last !== 5;
+  };
+  for (const box of boxes) {
+    box.addEventListener("input", () => {
+      const value = box.value;
+      if (value.length === 6) {
+        if (/^\d{6}$/.test(value)) {
+          boxes[0].setAttribute("maxlength", "1");
+          boxes.forEach((digit, index) => { digit.value = String(Number(value[index])); });
+          code.value = value;
+          login.disabled = false;
+          setTimeout(() => boxes[5].focus(), 300);
+        }
+      } else if (value.length === 1) {
+        const digit = value.replace(/[^0-9]/g, ""), index = Number(box.dataset.index);
+        box.value = digit;
+        if (digit && index < 5) boxes[index + 1].focus();
+        collect();
+      }
+    });
+  }
+  item.submitted = [];
+  login.addEventListener("click", () => item.submitted.push(code.value));
+  return item;
+}
+
+test("Coupang's mobile split widget is filled as one group and its login button is activated", async () => {
+  const item = coupangSplit();
+  const { window, document, fields } = item;
+  const selected = target(document, fields, "001234");
+  const boxes = [...document.querySelectorAll(".code-digit")];
+  assert.equal(selected.inputs.length, 6);
+  assert.ok(selected.inputs.every((input, index) => input === boxes[index]));
+  const result = await fields.complete(selected, "001234", () => true, fields.fill, () => assert.fail("split widgets use DOM input"));
+  assert.equal(result.success, true);
+  assert.equal(result.submitted, true);
+  assert.deepEqual(item.submitted, ["001234"]);
+  window.close();
+});
+
+test("the Coupang split widget completes through the bridge after Android Allow", async () => {
+  const item = coupangSplit();
+  const { window, document } = item;
+  const { ports, base } = (() => {
+    const ports = [];
+    window.isSecureContext = true;
+    window.browser = { runtime: { connectNative() {
+      const messages = [], listeners = [];
+      const port = { messages, onMessage: { addListener: fn => listeners.push(fn) }, onDisconnect: { addListener() {} },
+        postMessage: data => {
+          messages.push(data);
+          if (data.type === "input") queueMicrotask(() => port.deliver({ ...data, type: "input-result", success: false }));
+        },
+        disconnect() {}, deliver: data => Promise.all(listeners.map(fn => fn(data))) };
+      ports.push(port);
+      return port;
+    } } };
+    window.eval(fs.readFileSync(path.join(assets, "content.js"), "utf8"));
+    return { ports, base: { document: ports[0].messages[0].document, href: window.location.href, request: "1" } };
+  })();
+  assert.equal(ports[0].messages[0].hasTarget, true);
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  const choice = ports[0].messages.find(message => message.type === "fields");
+  assert.equal(choice.fields.length, 1);
+  await ports[0].deliver({ ...base, type: "fill", field: choice.automatic, code: "001234" });
+  const filled = ports[0].messages.find(message => message.type === "filled");
+  assert.deepEqual({ success: filled.success, submitted: filled.submitted }, { success: true, submitted: true });
+  assert.equal(document.getElementById("smsCode").value, "001234");
+  assert.deepEqual(item.submitted, ["001234"]);
+  window.close();
+});
+
+test("Coupang's PC code step with a single number input is filled and its login button activated", async () => {
+  // Attributes observed on login.coupang.com/login/otpLogin.pang; the handler mirrors m-sms-login.min.js.
+  const { window, document, fields } = fixture('<div id="smsLogin" class="sms-login"><div class="sms-login__container">'
+    + '<div class="input-row"><div class="input-row"><input class="input-field verify-number" id="smsCode" placeholder="인증번호 6자리"'
+    + ' aria-label="인증번호 6자리" autocomplete="one-time-code" autofocus inputmode="numeric" type="number"></div></div>'
+    + '<button class="send-again" id="sendAgain" disabled>재발송</button><button id="loginWithSmsCode" disabled>로그인</button>'
+    + '<button class="link-btn" id="loginLink"><div>비밀번호로 로그인</div></button></div></div>');
+  const input = document.getElementById("smsCode"), login = document.getElementById("loginWithSmsCode");
+  input.addEventListener("input", event => { login.disabled = !event.target.value; });
+  const submitted = [];
+  login.addEventListener("click", () => submitted.push(input.value));
+  const result = await fields.complete(target(document, fields, "001234"), "001234");
+  assert.deepEqual({ success: result.success, submitted: result.submitted }, { success: true, submitted: true });
+  assert.deepEqual(submitted, ["001234"]);
+  window.close();
+});
+
+test("a code spread from the first box into unlimited sibling boxes is adopted as the filled widget", async () => {
+  for (const native of [false, true]) {
+    const { window, document, fields } = fixture('<div><div id="boxes"><input id="first" autocomplete="one-time-code" maxlength="6">'
+      + '<input><input><input><input><input></div><button id="login" disabled>로그인</button></div>');
+    const boxes = [...document.querySelectorAll("#boxes input")], login = document.getElementById("login");
+    boxes[0].addEventListener("input", () => {
+      const value = boxes[0].value;
+      if (value.length !== 6) return;
+      boxes.forEach((box, index) => { box.value = value[index]; });
+      login.disabled = false;
+    });
+    const submitted = [];
+    login.addEventListener("click", () => submitted.push(boxes.map(box => box.value).join("")));
+    const selected = target(document, fields, "001234");
+    assert.equal(selected.inputs[0].id, "first");
+    const result = await fields.complete(selected, "001234", () => true, fields.fill, native ? (chosen, code) => {
+      chosen.inputs[0].value = code;
+      chosen.inputs[0].dispatchEvent(new window.Event("input", { bubbles: true }));
+      return true;
+    } : null);
+    assert.deepEqual({ success: result.success, submitted: result.submitted }, { success: true, submitted: true });
+    assert.deepEqual(submitted, ["001234"]);
+    window.close();
+  }
+});
+
+test("a spread is adopted only when the following boxes contain exactly the code", async () => {
+  const { window, document, fields } = fixture('<div><div><input id="first" autocomplete="one-time-code" maxlength="6">'
+    + '<input><input><input><input><input></div><button id="login">로그인</button></div>');
+  const boxes = [...document.querySelectorAll("input")];
+  boxes[0].addEventListener("input", () => { boxes.forEach((box, index) => { box.value = "9876543"[index]; }); });
+  let clicks = 0;
+  document.getElementById("login").addEventListener("click", () => clicks++);
+  const result = await fields.complete(target(document, fields, "001234"), "001234");
+  assert.equal(result.success, false);
+  assert.equal(result.reason, "changed");
+  assert.equal(clicks, 0);
+  window.close();
+});
+
+test("a transparent one-time-code input over decorative slots is filled, but unmarked transparent inputs are not", () => {
+  const { window, document, fields } = fixture('<div class="slots"><span></span><span></span><span></span></div>'
+    + '<input id="overlay" autocomplete="one-time-code" inputmode="numeric" maxlength="6" style="opacity:0"><input id="trap" style="opacity:0">');
+  const selected = target(document, fields, "001234");
+  assert.equal(selected.inputs[0].id, "overlay");
+  assert.deepEqual(Array.from(fields.scan(document, "001234").targets, item => item.inputs[0].id), ["overlay"]);
+  assert.equal(fields.fill(selected, "001234"), true);
+  window.close();
+});
+
+test("after approved SMS the unnamed control focused by the site is chosen among several unnamed controls", () => {
+  const { window, document, fields } = fixture('<input id="memo"><input id="entry" maxlength="6">');
+  assert.equal(target(document, fields, "001234"), null);
+  document.getElementById("entry").focus();
+  assert.equal(target(document, fields, "001234").inputs[0].id, "entry");
+  // Without an approved message the focused control is never treated as an OTP widget.
+  assert.equal(target(document, fields), null);
+  window.close();
+});
+
+test("a focused phone, name or coupon control is never inferred as the code field", () => {
+  for (const html of ['<input id="phone" type="tel" placeholder="휴대폰번호">', '<input id="name" placeholder="이름">', '<input id="couponCode">']) {
+    const { window, document, fields } = fixture(html + '<input id="other">' + '<input id="third">');
+    document.querySelector("input").focus();
+    assert.equal(target(document, fields, "001234"), null);
+    window.close();
+  }
+});
+
+test("a field that rejects the code reports why automatic input stopped", async () => {
+  const { window, document, ports, base } = bridge('<form><input autocomplete="one-time-code"><button>로그인</button></form>');
+  document.querySelector("input").addEventListener("input", event => setTimeout(() => { event.target.value = ""; }, 20));
+  await ports[0].deliver({ ...base, type: "scan", code: "001234" });
+  await ports[0].deliver({ ...base, type: "fill", field: "0", code: "001234" });
+  const filled = ports[0].messages.find(message => message.type === "filled");
+  assert.equal(filled.success, false);
+  assert.equal(filled.reason, "changed");
+  window.close();
+});

@@ -243,8 +243,8 @@ final class BrowserSmsAssist {
             // A submitted SPA can remove/hide its widget without navigating. End quietly;
             // disappearance does not prove that input or account verification succeeded.
             boolean departed = message.optBoolean("submitted") && message.optBoolean("departed");
-            if (!success && !departed) showFallback(request);
-            else if (success && !message.optBoolean("submitted")) showFallback(request, true);
+            if (!success && !departed) showFallback(request, false, message.optString("reason"));
+            else if (success && !message.optBoolean("submitted")) showFallback(request, true, null);
             else {
                 page.completed = true;
                 cancel();
@@ -292,7 +292,7 @@ final class BrowserSmsAssist {
 
     private void chooseField(Request request, JSONObject message) {
         JSONArray fields = message.optJSONArray("fields");
-        if (fields == null || fields.length() == 0 || fields.length() > 8) { showFallback(request); return; }
+        if (fields == null || fields.length() == 0 || fields.length() > 8) { showFallback(request, false, "field"); return; }
         List<String> ids = new ArrayList<>();
         List<String> labels = new ArrayList<>();
         for (int i = 0; i < fields.length(); i++) {
@@ -389,29 +389,45 @@ final class BrowserSmsAssist {
     private void expireResponse(Request request, Phase phase) {
         handler.postDelayed(() -> {
             if (pending == request && request.phase == phase) {
-                if (resumed && current(request)) showFallback(request);
+                if (resumed && current(request)) showFallback(request, false, phase == Phase.SCANNING ? "field" : "timeout");
                 else cancel();
             }
         }, RESPONSE_MS);
     }
 
     private void showFallback(Request request) {
-        showFallback(request, false);
+        showFallback(request, false, null);
     }
 
-    private void showFallback(Request request, boolean checkSite) {
+    private void showFallback(Request request, boolean checkSite, String reason) {
         String code = request.code;
         request.page.completed = true;
         cancel();
         if (code == null) { toast(R.string.sms_input_failed); return; }
+        String body = activity.getString(checkSite ? R.string.sms_check_site_body : R.string.sms_manual_body, code);
+        // A fixed cause makes a failed site reportable without logging page contents or the code.
+        int cause = failureCause(reason);
+        if (cause != 0) body += "\n\n" + activity.getString(R.string.sms_failure_cause, activity.getString(cause));
         dialog = new AlertDialog.Builder(activity).setTitle(checkSite ? R.string.sms_check_site : R.string.sms_manual_title)
-                .setMessage(activity.getString(checkSite ? R.string.sms_check_site_body : R.string.sms_manual_body, code))
+                .setMessage(body)
                 .setPositiveButton(R.string.okay, (d, which) -> cancel())
                 .setOnCancelListener(d -> cancel()).show();
         // The short-lived dialog closes on navigation, backgrounding or expiry.
         expiry = () -> { if (dialog != null) cancel(); };
         handler.postDelayed(expiry, 60_000);
         refresh();
+    }
+
+    private static int failureCause(String reason) {
+        if (reason == null) return 0;
+        return switch (reason) {
+            case "field" -> R.string.sms_cause_field;
+            case "changed" -> R.string.sms_cause_changed;
+            case "edited" -> R.string.sms_cause_edited;
+            case "button" -> R.string.sms_cause_button;
+            case "timeout" -> R.string.sms_cause_timeout;
+            default -> 0;
+        };
     }
 
     private void stopReceiver() {

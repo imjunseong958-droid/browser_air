@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "AIR SMS sign-in assistant",
-  "version": "2.6",
+  "version": "2.7",
   "browser_specific_settings": { "gecko": { "id": "sms-assist@air.local" } },
   "permissions": ["nativeMessaging", "nativeMessagingFromContent", "geckoViewAddons"],
   "content_scripts": [{

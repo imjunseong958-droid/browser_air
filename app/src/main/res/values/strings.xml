@@ -84,6 +84,12 @@
     <string name="sms_input_failed">자동으로 입력하지 못했어요. 인증번호를 직접 입력해 주세요.</string>
     <string name="sms_manual_title">인증번호를 직접 입력해 주세요</string>
     <string name="sms_manual_body">자동 입력을 완료하지 못했어요.\n\n인증번호: %1$s</string>
+    <string name="sms_failure_cause">원인: %1$s</string>
+    <string name="sms_cause_field">인증번호 입력칸을 찾지 못했어요</string>
+    <string name="sms_cause_changed">사이트가 입력한 번호를 지우거나 바꿨어요</string>
+    <string name="sms_cause_edited">입력 중에 값이 직접 수정됐어요</string>
+    <string name="sms_cause_button">확인 또는 로그인 버튼이 활성화되지 않았어요</string>
+    <string name="sms_cause_timeout">페이지가 제때 응답하지 않았어요</string>
     <string name="update_check">업데이트 확인</string>
     <string name="update_checking">새 버전을 확인하고 있어요…</string>
     <string name="update_available">AIR %1$s 업데이트</string>
