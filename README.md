@@ -1,6 +1,6 @@
 # AIR — Only the connections you need
 
-AIR is an Android app for QR links, forms, documents, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: a session follows the opened task, with bounded authentication and explicitly chosen continuations.
+AIR is an Android app for QR links, forms, documents, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: search and recommendation pages are blocked, while links, redirects, and pages opened from them work normally.
 
 AIR has no address bar, search entry point, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
 
@@ -41,9 +41,9 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 - Keeps recognized Google Forms, Docs, Sheets, Slides, Drawings, and Drive file links within the same resource, including submission and completion pages. Other websites use the original host and its `www` alias as the fallback boundary. HTTPS-to-HTTP transitions remain blocked.
 - Resolves recognized HTTPS Google `/url` link wrappers before loading, checking the final destination and rejecting ambiguous or unsafe targets. It never opens the wrapper as an unchecked redirect.
 - Allows Google account selection and sign-in with `continue` only when returning to the opened task. A login page displayed before the form does not replace the task boundary. This exception expires after 15 minutes and ends on return.
-- Pauses a user-initiated move to another site or document with **이 작업에서 이어 열까요?**. **이어서 열기** allows that continuation; **돌아가기**, backgrounding, or closing cancels it before a request is sent. One continuation is retained alongside the original task, rather than accumulating approved sites. Script-only cross-site navigation stays blocked.
+- Opens other sites and documents reached by links, redirects, scripts, popups, or frames without a prompt; the task follows the page you move to. Only search and recommendation destinations are refused.
 - Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load.
-- Blocks known search and recommendation entry points by destination and route, including Google/Bing search, Naver/Daum search, YouTube home/feed/search/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, and explicit continuations. CAPTCHA frames receive limited exceptions.
+- Blocks known search and recommendation entry points by destination and route, including Google/Bing search, Naver/Daum search, YouTube home/feed/search/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
 - Provides an Android Custom Tabs service so clients such as AppAuth can select AIR for authentication. It reports page-start, completion, failure, and close events to the calling app.
 - Tracks OAuth/OIDC requests using `redirect_uri`, `client_id`, and state values. External authentication started within a site must return to that site or an existing authentication transaction. Nested identity-provider flows preserve the original app callback and state.
 - Checks callback schemes, hosts, ports, paths, fixed query parameters, and the state value when supplied. Authentication exceptions are bounded to 15 minutes, eight authentication origins, and four nested transactions. Arbitrary `intent:` packages and browser fallback URLs are not executed.

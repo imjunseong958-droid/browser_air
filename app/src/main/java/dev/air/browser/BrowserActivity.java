@@ -41,7 +41,6 @@ public final class BrowserActivity extends AppCompatActivity {
     private BrowserPermissions permissions;
     private FirebaseAuthBridge firebaseAuth;
     private BrowserSmsAssist smsAssist;
-    private NavigationConfirmation pendingNavigation;
     private final List<GeckoSession> sessions = new ArrayList<>();
     private final Map<GeckoSession, String> locations = new IdentityHashMap<>();
     private final Map<GeckoSession, Boolean> backStates = new IdentityHashMap<>();
@@ -136,16 +135,12 @@ public final class BrowserActivity extends AppCompatActivity {
             if (request.uri.equals("about:blank") && (sessions.indexOf(source) > 0 || request.target == TARGET_WINDOW_NEW)) {
                 return GeckoResult.fromValue(AllowOrDeny.ALLOW);
             }
-            if (pendingNavigation != null) return GeckoResult.fromValue(AllowOrDeny.DENY);
             String original = unwrapCallbackIntent(request.uri);
             String url = NavigationPolicy.resolveLink(original);
             NavigationPolicy.Decision decision = policy.evaluate(url, request.isRedirect, request.hasUserGesture);
             if (decision == NavigationPolicy.Decision.AUTH_CALLBACK) {
                 handleCallback(url, source);
                 return GeckoResult.fromValue(AllowOrDeny.DENY);
-            }
-            if (decision == NavigationPolicy.Decision.CONFIRM_EXTERNAL) {
-                return confirmNavigation(source, url, !url.equals(original) || request.target == TARGET_WINDOW_NEW);
             }
             if (decision != NavigationPolicy.Decision.ALLOW) {
                 showBlocked(decision);
@@ -215,7 +210,6 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private final class ProgressDelegate implements GeckoSession.ProgressDelegate {
         @Override public void onPageStart(@NonNull GeckoSession source, @NonNull String uri) {
-            cancelNavigationConfirmation();
             smsAssist.pageStarted(source);
             securityStates.remove(source);
             if (!sessions.contains(source)) return;
@@ -244,64 +238,6 @@ public final class BrowserActivity extends AppCompatActivity {
             securityStates.put(source, info.isSecure && !info.isException);
             if (source == active()) secure = securityStates.get(source);
             smsAssist.refresh();
-        }
-    }
-
-    private GeckoResult<AllowOrDeny> confirmNavigation(GeckoSession source, String url, boolean reload) {
-        if (source != active() || isFinishing()) return GeckoResult.fromValue(AllowOrDeny.DENY);
-        NavigationConfirmation request = new NavigationConfirmation(source, url, reload);
-        pendingNavigation = request;
-        request.dialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.continue_task_title)
-                .setMessage(getString(R.string.continue_task_body, navigationDestinationLabel(url)))
-                .setPositiveButton(R.string.continue_task, (dialog, which) -> completeNavigationConfirmation(request, true))
-                .setNegativeButton(R.string.return_to_task, (dialog, which) -> completeNavigationConfirmation(request, false))
-                .setOnCancelListener(dialog -> completeNavigationConfirmation(request, false))
-                .create();
-        request.dialog.show();
-        return request.result;
-    }
-
-    private String navigationDestinationLabel(String url) {
-        WebAddress address = WebAddress.parse(url);
-        String path = address.uri().getRawPath();
-        if (path == null) path = "/";
-        if (path.length() > 200) path = path.substring(0, 200) + "…";
-        String port = address.port() == (address.scheme().equals("https") ? 443 : 80) ? "" : ":" + address.port();
-        return address.scheme() + "://" + address.host() + port + "\n" + path;
-    }
-
-    private void completeNavigationConfirmation(NavigationConfirmation request, boolean accept) {
-        if (pendingNavigation != request) return;
-        pendingNavigation = null;
-        boolean approved = accept && !isFinishing() && !shuttingDown && request.source == active()
-                && request.source.isOpen() && request.policy == policy
-                && java.util.Objects.equals(request.location, locations.get(request.source))
-                && policy.approveContinuation(request.url);
-        request.dialog.dismiss();
-        request.result.complete(approved && !request.reload ? AllowOrDeny.ALLOW : AllowOrDeny.DENY);
-        if (approved && request.reload) ui.root.post(() -> {
-            if (!shuttingDown && request.source == active() && request.policy == policy) request.source.loadUri(request.url);
-        });
-    }
-
-    private void cancelNavigationConfirmation() {
-        if (pendingNavigation != null) completeNavigationConfirmation(pendingNavigation, false);
-    }
-
-    private final class NavigationConfirmation {
-        final GeckoSession source;
-        final String url;
-        final boolean reload;
-        final String location;
-        final NavigationPolicy policy = BrowserActivity.this.policy;
-        final GeckoResult<AllowOrDeny> result = new GeckoResult<>();
-        AlertDialog dialog;
-        NavigationConfirmation(GeckoSession source, String url, boolean reload) {
-            this.source = source;
-            this.url = url;
-            this.reload = reload;
-            location = locations.get(source);
         }
     }
 
@@ -350,7 +286,6 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     private void closePopup(GeckoSession session) {
-        cancelNavigationConfirmation();
         smsAssist.visibleSessionChanged();
         if (session != null) smsAssist.detach(session);
         if (session == null || sessions.size() <= 1) { finish(); return; }
@@ -430,7 +365,6 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     private void closeSessions() {
-        cancelNavigationConfirmation();
         smsAssist.visibleSessionChanged();
         shuttingDown = true;
         ui.geckoView.releaseSession();
@@ -442,7 +376,6 @@ public final class BrowserActivity extends AppCompatActivity {
     }
 
     @Override protected void onPause() {
-        cancelNavigationConfirmation();
         smsAssist.pause();
         if (active() != null) active().setActive(false);
         super.onPause();

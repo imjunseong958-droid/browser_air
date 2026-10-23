@@ -30,10 +30,6 @@
     <string name="search_blocked_body">검색 결과나 추천 목록 대신, 필요한 설문·문서·인증 링크를 직접 열어주세요.</string>
     <string name="navigation_blocked">지금 작업과 연결되지 않은 이동이에요</string>
     <string name="navigation_blocked_body">열린 작업에 필요한 연결인지 확인할 수 없어요. 원래 링크에서 다시 시작해 주세요.</string>
-    <string name="continue_task_title">이 작업에서 이어 열까요?</string>
-    <string name="continue_task_body">%1$s\n\n지금 하던 일에 필요한 연결인지 확인해 주세요. 이 연결만 이어 열고, 검색·추천 목록은 계속 제한합니다.</string>
-    <string name="continue_task">이어서 열기</string>
-    <string name="return_to_task">돌아가기</string>
     <string name="camera_denied">카메라 권한이 필요해요</string>
     <string name="camera_denied_body">QR 코드를 읽을 때만 카메라를 사용해요. 앱 설정에서 카메라 권한을 허용할 수 있어요.</string>
     <string name="open_settings">앱 설정 열기</string>

@@ -57,31 +57,21 @@ public final class TaskNavigationTest {
                 "https://youtube.com/feed/subscriptions", "https://x.com/home", "https://x.com/explore",
                 "https://docs.google.com/forms/", "https://drive.google.com/drive/u/0/my-drive"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
-            assertFalse(loaded(FORM).approveContinuation(url));
+            assertEquals(url, BLOCK_SEARCH, loaded(FORM).evaluate(url, false, true));
+            assertEquals(url, BLOCK_SEARCH, loaded(FORM).evaluate(url, true, false));
         }
         assertEquals(ALLOW, NavigationPolicy.entryDecision("https://youtube.com/watch?v=example"));
     }
 
-    @Test public void aFormIncludesItsSubmissionAndCompletionButNotOtherForms() {
+    @Test public void otherDocumentsOpenFromAFormByLinkRedirectOrFrame() {
         var policy = loaded(FORM);
         assertEquals(ALLOW, policy.evaluate("https://docs.google.com/forms/d/e/form_A/formResponse", false, true));
-        assertEquals(ALLOW, policy.evaluate("https://docs.google.com/forms/d/e/form_A/viewform?edit2=token", false, true));
-        assertEquals(CONFIRM_EXTERNAL, policy.evaluate(OTHER_FORM, false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate(OTHER_FORM, false, false));
-        assertEquals(BLOCK_SITE, policy.evaluate(OTHER_FORM, true, false));
-        assertEquals(BLOCK_SITE, policy.evaluateFrame(OTHER_FORM));
-        assertEquals(CONFIRM_EXTERNAL, policy.evaluate("https://docs.google.com/document/d/doc_A/edit", false, true));
-    }
-
-    @Test public void resourceIdentityUsesNormalizedPathsAndSeparatesPublishedIds() {
-        var policy = loaded(FORM);
-        for (String path : new String[] {"/forms/d/e/form_A/../../form_B/viewform",
-                "/forms/d/e/form_A/%2e%2e/%2e%2e/form_B/viewform", "/forms/d/form_A/viewform"}) {
-            assertEquals(BLOCK_SITE, policy.evaluate("https://docs.google.com" + path, false, false));
-        }
+        assertEquals(ALLOW, policy.evaluate(OTHER_FORM, false, true));
+        assertEquals(ALLOW, loaded(FORM).evaluate(OTHER_FORM, false, false));
+        assertEquals(ALLOW, loaded(FORM).evaluate(OTHER_FORM, true, false));
+        assertEquals(ALLOW, loaded(FORM).evaluateFrame(OTHER_FORM));
+        assertEquals(ALLOW, loaded(FORM).evaluate("https://docs.google.com/document/d/doc_A/edit", false, true));
         assertEquals(ALLOW, loaded("https://drive.google.com/file/d/file_A/view")
-                .evaluate("https://drive.google.com/open?id=file_A", false, true));
-        assertEquals(CONFIRM_EXTERNAL, loaded("https://drive.google.com/file/d/file_A/view")
                 .evaluate("https://drive.google.com/open?id=file_B", false, true));
     }
 
@@ -93,7 +83,6 @@ public final class TaskNavigationTest {
         assertEquals(ALLOW, policy.evaluateFrame("https://accounts.google.com/signin/challenge"));
         assertEquals(ALLOW, policy.evaluate(FORM + "&authuser=0", true, false));
         assertFalse(policy.isAuthenticating());
-        assertEquals(BLOCK_SITE, policy.evaluateFrame("https://accounts.google.com/signin/challenge"));
     }
 
     @Test public void aWebsiteCanReturnFromGoogleSignInToItsOwnAccountPage() {
@@ -103,17 +92,13 @@ public final class TaskNavigationTest {
         assertFalse(policy.isAuthenticating());
     }
 
-    @Test public void signInCannotChangeItsReturnOrTurnIntoAccountManagement() {
+    @Test public void leavingASignInEndsItAndMovesTheTask() {
         var policy = loaded(FORM);
-        assertEquals(BLOCK_SITE, policy.evaluate(login(OTHER_FORM), false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://unknown.example/login?continue=" + encode(FORM), false, true));
         assertEquals(ALLOW, policy.evaluate(login(FORM), false, true));
-        assertEquals(BLOCK_SITE, policy.evaluateFrame(login(OTHER_FORM)));
-        assertEquals(BLOCK_SITE, policy.evaluateFrame(login(FORM) + "&continue=" + encode(OTHER_FORM)));
-        for (String url : new String[] {login(OTHER_FORM), login(FORM) + "&continue=" + encode(OTHER_FORM),
-                "https://accounts.google.com/ManageAccount", "https://other.example/", "https://accounts.google.com:444/signin/challenge"}) {
-            assertEquals(url, BLOCK_SITE, policy.evaluate(url, true, false));
-        }
+        assertTrue(policy.isAuthenticating());
+        assertEquals(ALLOW, policy.evaluate("https://other.example/", false, true));
+        assertFalse(policy.isAuthenticating());
+        assertEquals("other.example", policy.lockedHost());
     }
 
     @Test public void signInAsTheFirstDocumentDoesNotReplaceTheOriginalTask() {
@@ -124,7 +109,6 @@ public final class TaskNavigationTest {
         assertEquals("docs.google.com", policy.lockedHost());
         assertEquals(ALLOW, policy.evaluate(FORM, true, false));
         assertFalse(policy.isAuthenticating());
-        assertEquals(BLOCK_SITE, policy.evaluate(OTHER_FORM, true, false));
     }
 
     @Test public void aShortFormCanRedirectStraightToItsScopedSignIn() {
@@ -146,51 +130,29 @@ public final class TaskNavigationTest {
         assertEquals(ALLOW, policy.evaluate(login(FORM), false, true));
         now.addAndGet(6 * 60 * 1000);
         assertFalse(policy.isAuthenticating());
-        assertEquals(BLOCK_EXPIRED, policy.evaluate(FORM, true, false));
-        assertEquals(BLOCK_EXPIRED, policy.evaluate(login(FORM), false, true));
-        assertEquals(BLOCK_SITE, policy.evaluateFrame("https://accounts.google.com/signin/challenge"));
+        assertEquals(ALLOW, policy.evaluate(FORM, true, false));
+        assertFalse(policy.isAuthenticating());
     }
 
     @Test public void oauthCannotUseAnotherDocumentOnTheSameHostAsItsReturn() {
         String authorize = "https://identity.example/oauth/authorize?client_id=test&response_type=code&redirect_uri=";
+        var other = loaded(FORM);
+        assertEquals(ALLOW, other.evaluate(authorize + encode(OTHER_FORM), false, true));
+        assertFalse(other.isAuthenticating());
         var policy = loaded(FORM);
-        assertEquals(BLOCK_SITE, policy.evaluate(authorize + encode(OTHER_FORM), false, true));
         assertEquals(ALLOW, policy.evaluate(authorize + encode(FORM), false, true));
+        assertTrue(policy.isAuthenticating());
     }
 
-    @Test public void onlyAnExplicitContinuationOpensANewTaskAndItDoesNotAccumulateSites() {
+    @Test public void linksRedirectsAndScriptsCanLeaveTheTaskButNotForSearch() {
         var policy = loaded(FORM);
-        String first = "https://event.example/ticket";
-        String second = "https://files.example/receipt";
-        assertEquals(CONFIRM_EXTERNAL, policy.evaluate(first, false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate(first, false, false));
-        assertTrue(policy.approveContinuation(first));
-        assertEquals(ALLOW, policy.evaluate(first, false, false));
-        policy.pageLoaded(first);
+        assertEquals(ALLOW, policy.evaluate("https://event.example/ticket", false, true));
+        policy.pageLoaded("https://event.example/ticket");
+        assertEquals("event.example", policy.lockedHost());
+        assertEquals(ALLOW, policy.evaluate("https://files.example/receipt", false, false));
+        for (int i = 0; i < 10; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/", true, false));
         assertEquals(ALLOW, policy.evaluate(FORM, false, true));
-        assertTrue(policy.approveContinuation(second));
-        policy.pageLoaded(second);
-        assertEquals(BLOCK_SITE, policy.evaluate(first, false, false));
-        assertEquals(ALLOW, policy.evaluate(FORM, false, true));
-    }
-
-    @Test public void approvedLinksResolveOnlyTheirInitialServerRedirects() {
-        var policy = loaded(FORM);
-        assertTrue(policy.approveContinuation("https://short.example/link"));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://other.example/script", false, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("http://other.example/downgrade", true, false));
         assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/search?q=x", true, false));
-        for (int i = 0; i < 8; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/final", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://overflow.example/", true, false));
-        policy.pageLoaded("https://hop7.example/final");
-        assertEquals(BLOCK_SITE, policy.evaluate("https://after.example/", true, false));
-    }
-
-    @Test public void returningToTheOriginalPageAlsoEndsContinuationResolution() {
-        var policy = loaded(FORM);
-        assertTrue(policy.approveContinuation("https://short.example/link"));
-        assertEquals(ALLOW, policy.evaluate(FORM, true, false));
-        policy.pageLoaded(FORM);
-        assertEquals(BLOCK_SITE, policy.evaluate("https://unrelated.example/", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate(wrapper("https://www.bing.com/search?q=x"), false, true));
     }
 }
