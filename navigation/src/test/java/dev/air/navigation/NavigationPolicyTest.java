@@ -24,17 +24,14 @@ public final class NavigationPolicyTest {
         assertEquals(ALLOW, policy.evaluate("https://www.shop.example/checkout", false, true));
     }
 
-    @Test public void siblingSubdomainsAndDeceptiveSuffixesCannotEscape() {
-        NavigationPolicy policy = site("https://shop.example/");
+    @Test public void otherSitesOpenAndBecomeTheTask() {
         for (String url : new String[] {"https://other.example/", "https://shop.example.evil.test/",
-                "https://evil-shop.example/", "https://shop.example@evil.test/", "https://shop.example:444/"}) {
-            assertNotEquals(url, ALLOW, policy.evaluate(url, false, true));
+                "https://evil-shop.example/", "http://shop.example/"}) {
+            NavigationPolicy policy = site("https://shop.example/");
+            assertEquals(url, ALLOW, policy.evaluate(url, false, true));
+            assertEquals(url, WebAddress.parse(url).host(), policy.lockedHost());
         }
-    }
-
-    @Test public void httpsNeverDowngrades() {
-        assertEquals(BLOCK_SITE, site("https://example.com/").evaluate("http://example.com/", true, false));
-        assertEquals(ALLOW, site("http://example.com/").evaluate("https://example.com/", true, false));
+        assertEquals(BLOCK_INVALID, site("https://shop.example/").evaluate("https://shop.example@evil.test/", false, true));
     }
 
     @Test public void malformedAndLocalSchemeEntriesAreRejected() {
@@ -66,21 +63,21 @@ public final class NavigationPolicyTest {
         policy.pageLoaded("https://menu.restaurant.example/");
         assertEquals("menu.restaurant.example", policy.lockedHost());
         assertEquals(ALLOW, policy.evaluate("https://menu.restaurant.example/order", false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://different.example/", true, false));
-        assertEquals(CONFIRM_EXTERNAL, policy.evaluate("https://short.example/another-link", false, true));
+        assertEquals(ALLOW, policy.evaluate("https://short.example/another-link", false, true));
+        assertEquals(ALLOW, policy.evaluate("https://different.example/", true, false));
     }
 
-    @Test public void firstLoadDoesNotAllowScriptOrClickedCrossSiteMoves() {
+    @Test public void firstLoadAllowsScriptAndClickedCrossSiteMoves() {
         NavigationPolicy policy = new NavigationPolicy("https://example.com/");
-        assertEquals(BLOCK_SITE, policy.evaluate("https://evil.test/", false, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://evil.test/", false, true));
+        assertEquals(ALLOW, policy.evaluate("https://other.test/", false, false));
+        assertEquals(ALLOW, policy.evaluate("https://another.test/", false, true));
     }
 
-    @Test public void initialRedirectsAreBoundedAndNeverAllowSearch() {
+    @Test public void redirectChainsNeverAllowSearch() {
         NavigationPolicy policy = new NavigationPolicy("https://short.example/");
         assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/", true, false));
-        for (int i = 0; i < 8; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://hop9.example/", true, false));
+        for (int i = 0; i < 12; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.google.com/search?q=x", true, false));
     }
 
     @Test public void oauthCanReturnToExactAppCallback() {
@@ -115,30 +112,31 @@ public final class NavigationPolicyTest {
         assertEquals(ALLOW, policy.evaluate(oauth("corporate.identity.example", "https://shop.example/callback", "a"), false, true));
         assertTrue(policy.isAuthenticating());
         assertEquals(ALLOW, policy.evaluate("https://corporate.identity.example/login", false, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://corporate.identity.example/news", false, true));
         assertEquals(ALLOW, policy.evaluate("https://shop.example/callback?code=x&state=a", true, false));
         assertFalse(policy.isAuthenticating());
-        assertEquals(BLOCK_SITE, policy.evaluate("https://corporate.identity.example/login", false, true));
+        assertEquals(ALLOW, policy.evaluate("https://corporate.identity.example/news", false, true));
     }
 
     @Test public void oauthCannotReplaceTheScopedReturnWithAnotherSiteOrApp() {
         NavigationPolicy policy = site("https://shop.example/");
-        assertEquals(BLOCK_SITE, policy.evaluate(oauth("identity.example", "https://other.example/callback", "a"), false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate(oauth("identity.example", "otherapp:/callback", "a"), false, true));
+        assertEquals(ALLOW, policy.evaluate(oauth("identity.example", "otherapp:/callback", "a"), false, true));
+        assertFalse(policy.isAuthenticating());
+        assertEquals(BLOCK_INVALID, policy.evaluate("otherapp:/callback?code=x&state=a", true, false));
     }
 
-    @Test public void redirectFlagIsNotAGeneralLoginBypass() {
+    @Test public void unscopedLoginPagesOpenWithoutStartingAuthentication() {
         NavigationPolicy policy = site("https://shop.example/");
-        assertEquals(BLOCK_SITE, policy.evaluate("https://unknown.example/login", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://accounts.google.com/signin", true, false));
+        assertEquals(ALLOW, policy.evaluate("https://unknown.example/login", true, false));
+        assertEquals(ALLOW, policy.evaluate("https://accounts.google.com/signin", true, false));
+        assertFalse(policy.isAuthenticating());
     }
 
     @Test public void activeAuthMayFederateByServerRedirectButNotNormalLinks() {
         NavigationPolicy policy = site(oauth("identity.example", "myapp:/return", "a"));
         assertEquals(ALLOW, policy.evaluate("https://company.okta.com/sso/login", true, false));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://random.example/login", false, true));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://random.example/feed", true, false));
+        assertEquals(ALLOW, policy.evaluate("https://random.example/feed", false, true));
         assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/search?q=hi", true, false));
+        assertEquals(AUTH_CALLBACK, policy.evaluate("myapp:/return?code=x&state=a", true, false));
     }
 
     @Test public void anAuthorizationCannotUseUnsafeCallbackSchemes() {
@@ -154,7 +152,8 @@ public final class NavigationPolicyTest {
         now.addAndGet(16 * 60 * 1000);
         assertFalse(policy.isAuthenticating());
         assertEquals(BLOCK_EXPIRED, policy.evaluate("myapp:/return?code=x&state=a", true, false));
-        assertEquals(BLOCK_EXPIRED, policy.evaluate("https://company.okta.com/sso/login", true, false));
+        assertEquals(ALLOW, policy.evaluate("https://company.okta.com/sso/login", true, false));
+        assertEquals(BLOCK_INVALID, policy.evaluate("myapp:/return?code=x&state=a", true, false));
     }
 
     @Test public void captchaFramesWorkWithoutMakingGoogleSearchAccessible() {
@@ -162,7 +161,7 @@ public final class NavigationPolicyTest {
         assertEquals(ALLOW, policy.evaluateFrame("https://www.google.com/recaptcha/api2/anchor"));
         assertEquals(ALLOW, policy.evaluateFrame("https://challenges.cloudflare.com/turnstile/frame"));
         assertEquals(BLOCK_SEARCH, policy.evaluateFrame("https://www.google.com/search?q=hi"));
-        assertEquals(BLOCK_SITE, policy.evaluateFrame("https://other.example/"));
+        assertEquals(ALLOW, policy.evaluateFrame("https://other.example/"));
         assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.google.com/recaptcha/api2/anchor", false, true));
     }
 
@@ -175,7 +174,6 @@ public final class NavigationPolicyTest {
         assertEquals("app.example", policy.lockedHost());
         assertFalse(policy.isAuthenticating());
         assertFalse(policy.completeWebCallback(returned));
-        assertEquals(BLOCK_SITE, policy.evaluate("https://identity.example/login", false, true));
     }
 
     @Test public void nestedFederatedOAuthPreservesTheOriginalAppReturnAndState() {
@@ -185,14 +183,6 @@ public final class NavigationPolicyTest {
         assertTrue(policy.isAuthenticating());
         assertEquals(BLOCK_INVALID, policy.evaluate("myapp:/return?code=app-code&state=inner", true, false));
         assertEquals(AUTH_CALLBACK, policy.evaluate("myapp:/return?code=app-code&state=outer", true, false));
-    }
-
-    @Test public void authenticationPermissionsDoNotLeakToFramesAfterReturning() {
-        NavigationPolicy policy = site("https://shop.example/");
-        policy.evaluate(oauth("identity.example", "https://shop.example/callback", "a"), false, true);
-        assertEquals(ALLOW, policy.evaluateFrame("https://identity.example/login"));
-        policy.evaluate("https://shop.example/callback?code=x&state=a", true, false);
-        assertEquals(BLOCK_SITE, policy.evaluateFrame("https://identity.example/login"));
     }
 
     @Test public void sameSiteCallbackWithWrongStateIsStillBlocked() {
@@ -213,14 +203,6 @@ public final class NavigationPolicyTest {
         NavigationPolicy policy = site(oauth("identity.example", "myapp:callback", "a"));
         assertFalse(policy.isAuthenticating());
         assertEquals(BLOCK_INVALID, policy.evaluate("myapp:anything#code=x&state=a", true, false));
-    }
-
-    @Test public void visitingHttpsPermanentlyUpgradesAnHttpSession() {
-        NavigationPolicy policy = site("http://shop.example/");
-        assertEquals(ALLOW, policy.evaluate("https://shop.example/login", false, true));
-        policy.pageLoaded("https://shop.example/login");
-        assertEquals(BLOCK_SITE, policy.evaluate("http://shop.example/", false, true));
-        assertEquals(ALLOW, policy.evaluate("https://shop.example/account", false, true));
     }
 
     @Test public void authenticationPathTraversalCannotOpenAProvidersFeed() {

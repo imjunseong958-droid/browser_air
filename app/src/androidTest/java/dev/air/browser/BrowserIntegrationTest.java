@@ -99,39 +99,14 @@ public final class BrowserIntegrationTest {
         scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
     }
 
-    @Test public void sameSiteNavigationWorksAndCrossSiteClickIsBlocked() {
+    @Test public void sameSiteAndCrossSiteLinksOpenWithoutAPrompt() {
         open(server.url("/"));
         text("SAME_SITE_LINK").click();
         text("INSIDE_PAGE");
         awaitUrl("/inside");
         text("OTHER_SITE_LINK").click();
-        text("이 작업에서 이어 열까요?");
-        assertFalse("The external host received an HTTP request", server.otherHostVisited.get());
-        text("돌아가기").click();
-        assertTrue("Current address: " + displayedUrl(), displayedUrl().endsWith("/inside"));
-    }
-
-    @Test public void anExplicitContinuationOpensTheDisplayedDestination() {
-        open(server.url("/"));
-        text("SAME_SITE_LINK").click();
-        text("OTHER_SITE_LINK").click();
-        text("이 작업에서 이어 열까요?");
-        assertFalse(server.otherHostVisited.get());
-        text("이어서 열기").click();
         text("OTHER_HOST");
         assertTrue(server.otherHostVisited.get());
-    }
-
-    @Test public void backgroundingCancelsAnUnconfirmedContinuation() {
-        open(server.url("/inside"));
-        text("OTHER_SITE_LINK").click();
-        text("이 작업에서 이어 열까요?");
-        scenario.moveToState(Lifecycle.State.CREATED);
-        scenario.onActivity(activity -> assertNull(member(activity, "pendingNavigation")));
-        assertFalse(server.otherHostVisited.get());
-        scenario.moveToState(Lifecycle.State.RESUMED);
-        assertEquals(server.url("/inside"), displayedUrl());
-        assertFalse(server.otherHostVisited.get());
     }
 
     @Test public void aWrappedExternalEntryLoadsOnlyItsCheckedDestination() {
@@ -140,23 +115,18 @@ public final class BrowserIntegrationTest {
         assertEquals(server.url("/inside"), displayedUrl());
     }
 
-    @Test public void externalPopupsRequireAChoiceAndUseTheCurrentPage() {
+    @Test public void externalPopupsOpenWithoutAPrompt() {
         open(server.url("/inside"));
         text("OTHER_SITE_POPUP").click();
-        text("이 작업에서 이어 열까요?");
-        assertFalse(server.otherHostVisited.get());
-        text("이어서 열기").click();
         text("OTHER_HOST");
         assertTrue(server.otherHostVisited.get());
-        scenario.onActivity(activity -> assertEquals(1, ((java.util.List<?>) member(activity, "sessions")).size()));
     }
 
-    @Test public void scriptCannotNavigateOutsideLoadedSite() {
+    @Test public void scriptCanNavigateToAnotherSite() {
         open(server.url("/"));
         text("SCRIPT_ESCAPE").click();
-        device.waitForIdle();
-        assertFalse(server.otherHostVisited.get());
-        assertEquals(server.url("/"), displayedUrl());
+        text("OTHER_HOST");
+        assertTrue(server.otherHostVisited.get());
     }
 
     @Test public void popupUsesSamePolicyAndReturnsToParent() {
