@@ -181,9 +181,11 @@ public final class BrowserActivity extends AppCompatActivity {
         @Override public @Nullable GeckoResult<GeckoSession> onNewSession(@NonNull GeckoSession parent, @NonNull String url) {
             // A bounded child session preserves window.opener/postMessage for sign-in popups.
             // Gecko itself opens the returned session; returning an open session is an API error.
-            if (sessions.size() >= 3 || (!url.equals("about:blank") && !url.isEmpty()
-                    && policy.evaluate(url, false, true) != NavigationPolicy.Decision.ALLOW)) {
-                showBlocked(NavigationPolicy.Decision.BLOCK_SITE);
+            NavigationPolicy.Decision decision = sessions.size() >= 3 ? NavigationPolicy.Decision.BLOCK_SITE
+                    : url.equals("about:blank") || url.isEmpty() ? NavigationPolicy.Decision.ALLOW
+                    : policy.evaluate(url, false, true);
+            if (decision != NavigationPolicy.Decision.ALLOW) {
+                showBlocked(decision);
                 return null;
             }
             GeckoSession child = createSession();
@@ -341,13 +343,18 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private void showBlocked(NavigationPolicy.Decision decision) {
         int title = decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked
+                : decision == NavigationPolicy.Decision.BLOCK_COMMUNITY ? R.string.community_blocked
                 : decision == NavigationPolicy.Decision.BLOCK_EXPIRED ? R.string.auth_expired : R.string.navigation_blocked;
         Toast.makeText(this, title, Toast.LENGTH_LONG).show();
     }
 
     private void showEntryError(NavigationPolicy.Decision decision) {
-        showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
-                decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
+        if (decision == NavigationPolicy.Decision.BLOCK_COMMUNITY) {
+            showError(R.string.community_blocked, R.string.community_blocked_body, false);
+        } else {
+            showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
+                    decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
+        }
         ui.siteInfo.setEnabled(false);
     }
 

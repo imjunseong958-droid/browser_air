@@ -2,6 +2,16 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## SafeSearch text search, community blocking and filtered DNS — 28 October 2026
+
+The home screen's search opens Google results with `safe=active&udm=14`; other Google search links are rewritten to that form, and other engines stay blocked. A fixed community list is refused on every route, and the engine resolves names only through Cloudflare's family DNS-over-HTTPS resolver.
+
+- **52 navigation/Firebase tests** (seven new search and community cases), **14 update tests**, and **10 release-publication tests** passed. Debug and optimized unsigned release builds passed; both Lint variants reported zero errors.
+- **48 Android 15 / API 35 emulator integration tests** passed (41 browser, seven updater), including a community entry, a non-Google search entry, and the home search opening the SafeSearch text URL. Local fixtures still load with DNS-over-HTTPS-only mode.
+- With network access on the emulator, a home search loaded Google's text results through the family resolver, tapping the image tab reloaded text results, and an adult domain showed AIR's connection error. The resolver answered `0.0.0.0` for that domain and mapped `www.google.com` to `forcesafesearch.google.com`.
+
+Physical devices, networks that block DNS-over-HTTPS, and communities outside the list were not tested.
+
 ## Coupang mobile split code widget — 20 October 2026
 
 The reported failure occurs after Android's Allow: AIR shows **인증번호를 직접 입력해 주세요**. Earlier fixtures modelled a code widget appearing in the same document. Coupang's login script instead submits a form to a separate document, `/login/otpLogin.pang`, after sending the code. With the user's permission, the user requested a code on their own number in desktop Chrome, and AIR's real detector was run against that page. No code was entered and no login was attempted; the login click was intercepted.

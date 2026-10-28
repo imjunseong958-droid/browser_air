@@ -1,8 +1,8 @@
 # AIR — Only the connections you need
 
-AIR is an Android app for QR links, forms, documents, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: search and recommendation pages are blocked, while links, redirects, and pages opened from them work normally.
+AIR is an Android app for QR links, forms, documents, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: search shows Google SafeSearch text results only, recommendation feeds and communities are blocked, and adult domains do not resolve. Links, redirects, and pages opened from them otherwise work normally.
 
-AIR has no address bar, search entry point, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
+AIR has no address bar, search suggestions, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
 
 ## Install
 
@@ -37,13 +37,16 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 ## What it does
 
 - Opens external HTTP/HTTPS links and scans QR codes with the camera.
+- **필요한 것 검색** on the home screen opens one typed query as Google results with `safe=active` and `udm=14` (text links only). Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked.
 - Resolves up to eight initial HTTP redirects, including shortened QR links, then pins the session to the final site once the first document is displayed.
 - Keeps recognized Google Forms, Docs, Sheets, Slides, Drawings, and Drive file links within the same resource, including submission and completion pages. Other websites use the original host and its `www` alias as the fallback boundary. HTTPS-to-HTTP transitions remain blocked.
 - Resolves recognized HTTPS Google `/url` link wrappers before loading, checking the final destination and rejecting ambiguous or unsafe targets. It never opens the wrapper as an unchecked redirect.
 - Allows Google account selection and sign-in with `continue` only when returning to the opened task. A login page displayed before the form does not replace the task boundary. This exception expires after 15 minutes and ends on return.
-- Opens other sites and documents reached by links, redirects, scripts, popups, or frames without a prompt; the task follows the page you move to. Only search and recommendation destinations are refused.
+- Opens other sites and documents reached by links, redirects, scripts, popups, or frames without a prompt; the task follows the page you move to. Only search, recommendation, and community destinations are refused.
 - Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load.
-- Blocks known search and recommendation entry points by destination and route, including Google/Bing search, Naver/Daum search, YouTube home/feed/search/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
+- Blocks a fixed list of communities and their subdomains (for example DC Inside, FM Korea, theqoo, Ruliweb, Instiz, Clien, MLBPark, Nate Pann, Arca Live, and Reddit) on entry, links, redirects, popups, and frames. The list is `COMMUNITY_DOMAINS` in `navigation/src/main/java/dev/air/navigation/WebLinks.java`.
+- Resolves web addresses only through Cloudflare's family DNS-over-HTTPS resolver (`family.cloudflare-dns.com`), which refuses adult and malware domains. There is no fallback to the device's DNS.
+- Blocks known search and recommendation entry points by destination and route, including unfiltered Google search, Bing search, Naver/Daum search, YouTube home/feed/search/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
 - Provides an Android Custom Tabs service so clients such as AppAuth can select AIR for authentication. It reports page-start, completion, failure, and close events to the calling app.
 - Tracks OAuth/OIDC requests using `redirect_uri`, `client_id`, and state values. External authentication started within a site must return to that site or an existing authentication transaction. Nested identity-provider flows preserve the original app callback and state.
 - Checks callback schemes, hosts, ports, paths, fixed query parameters, and the state value when supplied. Authentication exceptions are bounded to 15 minutes, eight authentication origins, and four nested transactions. Arbitrary `intent:` packages and browser fallback URLs are not executed.
@@ -73,6 +76,8 @@ Removing SMS permissions avoids a known sensitive-permission condition in [Googl
 
 **Real-service login compatibility has not been verified across all providers.** Google, Kakao, Naver, and banking apps still need testing with real accounts on physical devices. Apps that require a specific Chrome package or signature, custom SAML or native authentication flows, unfamiliar CAPTCHA or payment domains, DRM, and provider-specific browser policies may need additional implementation or testing. AIR does not advertise unverified support for Auth Tab, Trusted Web Activities, Digital Asset Links, or Custom Tabs postMessage.
 
+SafeSearch and the family resolver reduce, but cannot eliminate, adult content: they do not filter images or posts inside otherwise allowed sites, and a community not on the list opens like any other site. If the resolver is unreachable (for example on a network that blocks DNS-over-HTTPS), pages fail to load instead of falling back to unfiltered DNS.
+
 AIR does not inspect and remove a site's own search, recommendations, or feeds from its DOM. Known route and document rules cannot identify every task, search, feed, or proxy site; unrecognized services retain the host boundary. Opening a new link from another app can start a new session. The navigation limits apply within AIR; other apps on the device remain usable.
 
 HTTP links are supported for uses such as restaurant menus, with an unencrypted-connection notice in the site information. Invalid TLS certificates cannot be bypassed.
@@ -83,7 +88,7 @@ AIR has no app-owned analytics SDK, advertising SDK, server, or account system, 
 
 SMS sign-in is off until explicitly enabled. Google's SMS User Consent API grants AIR access only to the newly approved message on every supported Android version. A dynamically registered receiver is protected by Play services' sender permission and is active only while waiting on a recognized foreground verification page. AIR does not request SMS receive/read/send permissions, notification access, or the default SMS-app role. Message text is parsed locally and discarded; codes stay briefly in memory and go only to the selected controls in that same document. AIR does not save messages/codes, copy them to the clipboard, or send them to an AIR server. Domain-bound SMS codes for other hosts are rejected. Only the enabled preference is stored.
 
-Websites and the browser engine make network requests needed for normal operation. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
+Websites and the browser engine make network requests needed for normal operation. Web address lookups go to Cloudflare's family resolver over HTTPS instead of the network's DNS server. Search terms go to Google as an ordinary search request; AIR keeps no search history. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
 
 The updater requests public version metadata and, after confirmation, APK files from GitHub. GitHub receives ordinary connection information such as the IP address. AIR sends no browsing URLs, sign-in cookies, account data, or device identifiers in these requests. Update-check timing and the last valid release manifest are stored locally; APKs are held in a private, dedicated cache directory. Debug builds skip automatic release checks because their signing key differs from the release channel.
 

@@ -48,7 +48,7 @@ public final class NavigationPolicyTest {
     }
 
     @Test public void knownSearchPortalsAreBlockedEvenAtEntry() {
-        for (String url : new String[] {"https://www.google.com/search?q=test", "https://google.co.kr/",
+        for (String url : new String[] {"https://www.google.com/imghp", "https://google.co.kr/",
                 "https://www.bing.com/", "https://duckduckgo.com/", "https://search.naver.com/search.naver?query=hi",
                 "https://m.naver.com/", "https://search.daum.net/", "https://search.brave.com/"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
@@ -77,7 +77,7 @@ public final class NavigationPolicyTest {
         NavigationPolicy policy = new NavigationPolicy("https://short.example/");
         assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/", true, false));
         for (int i = 0; i < 12; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/", true, false));
-        assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.google.com/search?q=x", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.bing.com/search?q=x", true, false));
     }
 
     @Test public void oauthCanReturnToExactAppCallback() {
@@ -135,7 +135,7 @@ public final class NavigationPolicyTest {
         NavigationPolicy policy = site(oauth("identity.example", "myapp:/return", "a"));
         assertEquals(ALLOW, policy.evaluate("https://company.okta.com/sso/login", true, false));
         assertEquals(ALLOW, policy.evaluate("https://random.example/feed", false, true));
-        assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/search?q=hi", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.bing.com/search?q=hi", true, false));
         assertEquals(AUTH_CALLBACK, policy.evaluate("myapp:/return?code=x&state=a", true, false));
     }
 

@@ -7,6 +7,8 @@ import org.mozilla.geckoview.GeckoResult;
 import org.mozilla.geckoview.WebExtension;
 
 public final class AirApplication extends Application {
+    /** Cloudflare's family resolver refuses adult and malware domains; there is no unfiltered fallback. */
+    private static final String FILTERED_DNS = "https://family.cloudflare-dns.com/dns-query";
     private GeckoRuntime runtime;
     private GeckoResult<WebExtension> smsExtension;
 
@@ -19,6 +21,8 @@ public final class AirApplication extends Application {
                     .consoleOutput(false)
                     .aboutConfigEnabled(false)
                     .loginAutofillEnabled(false)
+                    .trustedRecursiveResolverMode(GeckoRuntimeSettings.TRR_MODE_ONLY)
+                    .trustedRecursiveResolverUri(FILTERED_DNS)
                     .build();
             runtime = GeckoRuntime.create(this, settings);
             smsExtension = runtime.getWebExtensionController().ensureBuiltIn(

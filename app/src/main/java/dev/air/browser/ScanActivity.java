@@ -48,7 +48,8 @@ public final class ScanActivity extends AppCompatActivity {
                     long now = SystemClock.elapsedRealtime();
                     if (now - lastRejected > 2500) {
                         Toast.makeText(ScanActivity.this, decision == NavigationPolicy.Decision.BLOCK_SEARCH
-                                ? R.string.search_blocked : R.string.invalid_link_body, Toast.LENGTH_SHORT).show();
+                                ? R.string.search_blocked : decision == NavigationPolicy.Decision.BLOCK_COMMUNITY
+                                ? R.string.community_blocked : R.string.invalid_link_body, Toast.LENGTH_SHORT).show();
                         lastRejected = now;
                     }
                     return;
