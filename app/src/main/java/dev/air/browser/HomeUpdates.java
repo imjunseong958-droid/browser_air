@@ -33,17 +33,18 @@ final class HomeUpdates {
         });
         installer = activity.registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> resume());
         model.state().observe(activity, this::render);
-        button.setOnClickListener(view -> {
-            UpdateInfo info = model.available();
-            if (info == null) { model.check(true); return; }
-            new AlertDialog.Builder(activity)
-                    .setTitle(R.string.update_title)
-                    .setMessage(activity.getString(R.string.update_body, info.versionName,
-                            (int) Math.ceil(info.sizeBytes / (1024.0 * 1024.0))))
-                    .setPositiveButton(R.string.update_download, (dialog, which) -> model.downloadForInstall())
-                    .setNegativeButton(R.string.later, null)
-                    .show();
-        });
+        // Always ask for the latest release first, so a remembered older one is never installed on the way.
+        button.setOnClickListener(view -> model.check(true));
+    }
+
+    private void offer(UpdateInfo info) {
+        new AlertDialog.Builder(activity)
+                .setTitle(R.string.update_title)
+                .setMessage(activity.getString(R.string.update_body, info.versionName,
+                        (int) Math.ceil(info.sizeBytes / (1024.0 * 1024.0))))
+                .setPositiveButton(R.string.update_download, (dialog, which) -> model.downloadForInstall())
+                .setNegativeButton(R.string.later, null)
+                .show();
     }
 
     void resume() {
@@ -66,6 +67,8 @@ final class HomeUpdates {
         if (!activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)) return;
         int notice = model.consumeNotice();
         if (notice != 0) Toast.makeText(activity, notice, Toast.LENGTH_LONG).show();
+        UpdateInfo offered = model.consumeOffer();
+        if (offered != null) offer(offered);
         File apk = model.consumeInstallRequest();
         if (apk == null) return;
         if (!activity.getPackageManager().canRequestPackageInstalls()) {

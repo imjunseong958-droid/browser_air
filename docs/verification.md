@@ -2,6 +2,16 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Updates go straight to the newest release — 28 October 2026
+
+Tapping the update button installed the release remembered from the last check, so a newer release published since then appeared only after that install and the next daily check. The button now fetches the latest manifest first, and installing the remembered release makes the next check due at once. The search card no longer moves while the keyboard opens. The four Dependabot action updates ship in the same release: `setup-java` 6.1.0, `setup-android` 4.0.4, `upload-artifact` 7.0.2, and `download-artifact` 8.0.2, each pinned SHA confirmed against its official tag.
+
+- **58 navigation/Firebase tests** and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
+- **19 Android 15 / API 35 emulator integration tests** passed, including a check that installing a remembered release clears the 24-hour wait. The home search test passed three times in a row after the card was fixed in place; before, it once opened YouTube when Google was tapped.
+- On the emulator, with a stale remembered release (`0.1.3-stale`) on the button, tapping it offered the newest public release, **0.1.3+1049**, instead.
+- The new artifact actions run only on main, so the release run after merging is their first real use.
+- Release version names are now plain `0.1.N`: a build with `AIR_VERSION_CODE=1052` reported `versionName='0.1.52'` in `aapt dump badging`, a local build kept `0.1.3`, and `AIR_VERSION_CODE=999` was rejected. Release-publication tests (10) passed.
+
 ## Spotlight search, quieter screens, and no built-in QR scanner — 28 October 2026
 
 Home search is now a spotlight-style overlay: a floating search field near the top over a dimmed home screen (blurred on Android 12 and later), with Google and YouTube rows that appear once a query is typed. The home screen keeps only the logo, illustration, search bar, a default-browser hint when AIR is not the default, and the update button; slogan and guide copy was removed there, in search, and in block messages. Dialogs use rounded cards and bolder titles, the browser header is a back button, a site pill, and a **끝내기** pill, and Korean text breaks between phrases on Android 13 and later. The built-in QR scanner and the ZXing dependency were removed; the phone's camera app opens QR links in AIR when AIR is the default browser. The camera permission remains for websites.

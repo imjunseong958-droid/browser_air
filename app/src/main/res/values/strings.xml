@@ -62,7 +62,6 @@
     <string name="update_body">AIR %1$s로 업데이트할까요?\n\n약 %2$dMB를 다운로드합니다. 설치는 Android 확인 화면에서 승인해 주세요. 기존 설정과 로그인 정보는 유지됩니다.</string>
     <string name="update_download">다운로드 및 업데이트</string>
     <string name="update_progress">다운로드 중 %1$d%%</string>
-    <string name="update_found">새 버전이 있어요. 업데이트 버튼을 눌러 주세요.</string>
     <string name="update_latest">최신 버전을 사용하고 있어요.</string>
     <string name="update_not_published">아직 공개된 업데이트가 없어요.</string>
     <string name="update_unsupported">이 업데이트는 더 새로운 Android 버전이 필요해요.</string>

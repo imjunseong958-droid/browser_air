@@ -14,19 +14,19 @@ Distributed APKs use a fixed release signing key and keep the application ID `de
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Scan QR code** is the primary home action; a small **Check for updates** button sits below the footer. The app interface is currently in Korean.
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Search** is the home action; a small **Check for updates** button sits at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 
 ## Updates
 
-AIR release builds quietly check GitHub Releases when the home screen opens, at most once per 24 hours. The footer button changes to **Update AIR [version]** when a newer compatible release is available. Tap it to confirm the download, see its progress, and open Android's installation confirmation. You can also tap **Check for updates** to check immediately. Automatic checks do not show popups or download APKs.
+AIR release builds quietly check GitHub Releases when the home screen opens, at most once per 24 hours, and again right after an update installs. The footer button changes to **Update AIR [version]** when a newer compatible release is available. Tapping it, or **Check for updates**, first asks GitHub for the latest release and offers that one, so releases published in between are skipped rather than installed one by one. Confirm the download, see its progress, and open Android's installation confirmation. Automatic checks do not show popups or download APKs.
 
 On the first in-app update, Android may require enabling **Allow from this source** for AIR. Return to AIR to continue installing the verified download. Android still asks you to approve installation. Closing the installation screen leaves the download available for retry. Network failures do not block QR scanning or browsing, and a completed download can be retried without downloading it again. Network work survives screen rotation and stops when the home screen is finished; interrupted downloads are not offered for installation.
 
 Updates preserve app data, including settings and the Gecko profile containing cookies and site storage, when the package name and signing certificate match. AIR verifies the downloaded file's size, SHA-256, application ID, version, minimum Android version, ARM64 libraries, and installed signing certificate before offering it to Android. Downloads use HTTPS and are limited to this repository's release URLs and GitHub's release-asset hosts. The updater has no GitHub token and never exposes browser storage to the installer.
 
-CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. `airVersionName` in `gradle.properties` is the base version; builds with `AIR_VERSION_CODE` set append the code, such as `0.1.2+1010`, to distinguish successive builds.
+CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. `airVersionName` in `gradle.properties` is the major and minor version; a release build numbers the last part from its version code, so versionCode `1052` is shown as `0.1.52`. Releases before this change were named like `0.1.3+1049`. Local builds without `AIR_VERSION_CODE` use `airVersionCode`, such as `0.1.3`.
 
 **Enabling in-app updates:** releases made before this feature must be updated manually once by installing a newer `AIR.apk`. Subsequent releases can be downloaded and installed through AIR's update button. Manual APK installation remains available; do not uninstall AIR before updating an existing release.
 
