@@ -7,7 +7,8 @@
     android:orientation="vertical"
     android:paddingHorizontal="16dp">
 
-    <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="0.16" />
+    <!-- A fixed offset keeps the card still while the keyboard opens, so a tap lands on the row it was aimed at. -->
+    <Space android:layout_width="1dp" android:layout_height="96dp" />
 
     <LinearLayout
         android:id="@+id/card"

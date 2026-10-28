@@ -39,6 +39,7 @@ public final class AirUpdateModel extends AndroidViewModel {
     private volatile boolean installRequested;
     private volatile File installFile;
     private volatile int notice;
+    private volatile boolean offer;
     private volatile UpdateInfo available;
 
     public AirUpdateModel(Application app) {
@@ -49,7 +50,8 @@ public final class AirUpdateModel extends AndroidViewModel {
             if (cached != null) {
                 UpdateInfo info = UpdateManifest.read(cached.getBytes(StandardCharsets.UTF_8));
                 if (info.isNewerThan(installedVersion()) && info.minSdk <= Build.VERSION.SDK_INT) available = info;
-                else preferences.edit().remove("manifest").apply();
+                // The remembered update is installed; check again now in case a newer release followed it.
+                else preferences.edit().remove("manifest").remove("last_attempt").apply();
             }
         } catch (Exception invalidCache) { preferences.edit().remove("manifest").apply(); }
         state.setValue(new State(available, Phase.IDLE, 0));
@@ -78,7 +80,7 @@ public final class AirUpdateModel extends AndroidViewModel {
                     available = info;
                     preferences.edit().putString("manifest", new String(bytes, StandardCharsets.UTF_8)).apply();
                     removeOtherDownloads(candidate(info));
-                    if (manual) notice = R.string.update_found;
+                    if (manual) offer = true;
                 } else {
                     available = null;
                     preferences.edit().remove("manifest").apply();
@@ -139,6 +141,12 @@ public final class AirUpdateModel extends AndroidViewModel {
         return installFile;
     }
     int consumeNotice() { int message = notice; notice = 0; return message; }
+    /** The newest release found by a check the user asked for, offered once. */
+    UpdateInfo consumeOffer() {
+        if (!offer) return null;
+        offer = false;
+        return available;
+    }
 
     void awaitingPermission(boolean waiting) {
         preferences.edit().putLong("permission_request", waiting ? System.currentTimeMillis() : 0).apply();

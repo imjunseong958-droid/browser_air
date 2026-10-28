@@ -78,10 +78,13 @@ public final class UpdateIntegrationTest {
     }
     @Test public void cacheDoesNotOfferAnAlreadyInstalledVersion() throws Exception {
         long installed = app().getPackageManager().getPackageInfo(app().getPackageName(), 0).getLongVersionCode();
-        app().getSharedPreferences(AirUpdateModel.PREFS, 0).edit().putString("manifest", manifest(installed).toString()).commit();
+        app().getSharedPreferences(AirUpdateModel.PREFS, 0).edit().putString("manifest", manifest(installed).toString())
+                .putLong("last_attempt", System.currentTimeMillis()).commit();
         InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
             AirUpdateModel model = new AirUpdateModel((Application) app().getApplicationContext());
             assertNull(model.available()); model.onCleared();
         });
+        // Installing the remembered update makes the next check due at once, so a newer release is found without a day's wait.
+        assertFalse(app().getSharedPreferences(AirUpdateModel.PREFS, 0).contains("last_attempt"));
     }
 }

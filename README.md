@@ -14,13 +14,13 @@ Distributed APKs use a fixed release signing key and keep the application ID `de
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Scan QR code** is the primary home action; a small **Check for updates** button sits below the footer. The app interface is currently in Korean.
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Search** is the home action; a small **Check for updates** button sits at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 
 ## Updates
 
-AIR release builds quietly check GitHub Releases when the home screen opens, at most once per 24 hours. The footer button changes to **Update AIR [version]** when a newer compatible release is available. Tap it to confirm the download, see its progress, and open Android's installation confirmation. You can also tap **Check for updates** to check immediately. Automatic checks do not show popups or download APKs.
+AIR release builds quietly check GitHub Releases when the home screen opens, at most once per 24 hours, and again right after an update installs. The footer button changes to **Update AIR [version]** when a newer compatible release is available. Tapping it, or **Check for updates**, first asks GitHub for the latest release and offers that one, so releases published in between are skipped rather than installed one by one. Confirm the download, see its progress, and open Android's installation confirmation. Automatic checks do not show popups or download APKs.
 
 On the first in-app update, Android may require enabling **Allow from this source** for AIR. Return to AIR to continue installing the verified download. Android still asks you to approve installation. Closing the installation screen leaves the download available for retry. Network failures do not block QR scanning or browsing, and a completed download can be retried without downloading it again. Network work survives screen rotation and stops when the home screen is finished; interrupted downloads are not offered for installation.
 
