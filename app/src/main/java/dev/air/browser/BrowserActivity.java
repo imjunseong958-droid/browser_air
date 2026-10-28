@@ -337,7 +337,8 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private void showBlocked(NavigationPolicy.Decision decision) {
         int title = decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked
-                : decision == NavigationPolicy.Decision.BLOCK_COMMUNITY ? R.string.community_blocked
+                : decision == NavigationPolicy.Decision.BLOCK_COMMUNITY || decision == NavigationPolicy.Decision.BLOCK_ADULT
+                ? R.string.site_blocked
                 : decision == NavigationPolicy.Decision.BLOCK_RECOMMENDATION ? R.string.recommendation_blocked
                 : decision == NavigationPolicy.Decision.BLOCK_EXPIRED ? R.string.auth_expired : R.string.navigation_blocked;
         Toast.makeText(this, title, Toast.LENGTH_LONG).show();
@@ -345,7 +346,9 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private void showEntryError(NavigationPolicy.Decision decision) {
         if (decision == NavigationPolicy.Decision.BLOCK_COMMUNITY) {
-            showError(R.string.community_blocked, R.string.community_blocked_body, false);
+            showError(R.string.site_blocked, R.string.community_blocked_body, false);
+        } else if (decision == NavigationPolicy.Decision.BLOCK_ADULT) {
+            showError(R.string.site_blocked, R.string.adult_blocked_body, false);
         } else {
             showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
                     decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);

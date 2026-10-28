@@ -6,9 +6,16 @@ Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. 
 
 Home search is now a spotlight-style overlay: a floating search field near the top over a dimmed home screen (blurred on Android 12 and later), with Google and YouTube rows that appear once a query is typed. The home screen keeps only the logo, illustration, search bar, a default-browser hint when AIR is not the default, and the update button; slogan and guide copy was removed there, in search, and in block messages. Dialogs use rounded cards and bolder titles, the browser header is a back button, a site pill, and a **끝내기** pill, and Korean text breaks between phrases on Android 13 and later. The built-in QR scanner and the ZXing dependency were removed; the phone's camera app opens QR links in AIR when AIR is the default browser. The camera permission remains for websites.
 
-- **56 navigation/Firebase tests** and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
-- **18 Android 15 / API 35 emulator integration tests** passed (11 browser, seven updater), including home search through the new overlay.
+- After merging the adult-site rules, **58 navigation/Firebase tests** and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
+- **19 Android 15 / API 35 emulator integration tests** passed (12 browser, seven updater), including home search through the new overlay and the nimi.wiki entry.
 - Screens were checked on the emulator: home, the search overlay empty and with a query, a blocked entry, a loaded page header, and the first-run dialog. Physical devices, dark mode, and Android 10–11 (no blur) were not checked.
+
+## Adult sites the family resolver misses — 28 October 2026
+
+nimi.wiki, the X video ranking known as 트위터닷넷 or 니미위키, resolved normally through `family.cloudflare-dns.com`, while pornhub.com, twidouga.net, twivideo.net, and twiigle.com answered `0.0.0.0`. The literal twitter.net domain also passed the resolver; it currently redirects to a domain-for-sale page. AIR now refuses these on every route itself, with a separate adult-site message.
+
+- **58 navigation/Firebase tests** (two new adult-site cases: listed domains, name rules, adult TLDs, Google wrappers, Google sign-in returns, and X, twitter.com, sussex.ac.uk, and namu.wiki staying open) and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
+- **12 Android 15 / API 35 emulator browser integration tests** passed, including a nimi.wiki entry that shows the adult-site message without starting the engine.
 
 ## SafeSearch text search, community blocking and filtered DNS — 28 October 2026
 
