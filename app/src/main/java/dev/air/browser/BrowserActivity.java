@@ -89,7 +89,12 @@ public final class BrowserActivity extends AppCompatActivity {
         sessions.add(session);
         session.open(((AirApplication) getApplication()).runtime());
         ui.geckoView.setSession(session);
-        session.loadUri(entryUrl);
+        ((AirApplication) getApplication()).extensionsReady().accept(
+                ignored -> loadEntry(session), ignored -> loadEntry(session));
+    }
+
+    private void loadEntry(GeckoSession session) {
+        if (!isFinishing() && !shuttingDown && sessions.contains(session) && session.isOpen()) session.loadUri(entryUrl);
     }
 
     private GeckoSession createSession() {
@@ -129,7 +134,8 @@ public final class BrowserActivity extends AppCompatActivity {
             }
             String original = unwrapCallbackIntent(request.uri);
             String url = NavigationPolicy.resolveLink(original);
-            NavigationPolicy.Decision decision = policy.evaluate(url, request.isRedirect, request.hasUserGesture);
+            NavigationPolicy.Decision decision = NavigationPolicy.pageChange(locations.get(source), url);
+            if (decision == NavigationPolicy.Decision.ALLOW) decision = policy.evaluate(url, request.isRedirect, request.hasUserGesture);
             if (decision == NavigationPolicy.Decision.AUTH_CALLBACK) {
                 handleCallback(url, source);
                 return GeckoResult.fromValue(AllowOrDeny.DENY);
@@ -156,6 +162,14 @@ public final class BrowserActivity extends AppCompatActivity {
         @Override public void onLocationChange(@NonNull GeckoSession source, @Nullable String url,
                 @NonNull List<GeckoSession.PermissionDelegate.ContentPermission> permissions, @NonNull Boolean gesture) {
             if (url == null || url.equals("about:blank")) return;
+            String previous = locations.get(source);
+            NavigationPolicy.Decision moved = NavigationPolicy.pageChange(previous, url);
+            if (previous != null && moved != NavigationPolicy.Decision.ALLOW) {
+                // The page changed its own address without a load request (YouTube does this); undo the move.
+                showBlocked(moved);
+                ui.root.post(() -> returnTo(source, previous));
+                return;
+            }
             locations.put(source, url);
             if (source == active()) {
                 currentUrl = url;
@@ -172,9 +186,11 @@ public final class BrowserActivity extends AppCompatActivity {
         @Override public @Nullable GeckoResult<GeckoSession> onNewSession(@NonNull GeckoSession parent, @NonNull String url) {
             // A bounded child session preserves window.opener/postMessage for sign-in popups.
             // Gecko itself opens the returned session; returning an open session is an API error.
-            if (sessions.size() >= 3 || (!url.equals("about:blank") && !url.isEmpty()
-                    && policy.evaluate(url, false, true) != NavigationPolicy.Decision.ALLOW)) {
-                showBlocked(NavigationPolicy.Decision.BLOCK_SITE);
+            NavigationPolicy.Decision decision = sessions.size() >= 3 ? NavigationPolicy.Decision.BLOCK_SITE
+                    : url.equals("about:blank") || url.isEmpty() ? NavigationPolicy.Decision.ALLOW
+                    : policy.evaluate(url, false, true);
+            if (decision != NavigationPolicy.Decision.ALLOW) {
+                showBlocked(decision);
                 return null;
             }
             GeckoSession child = createSession();
@@ -265,6 +281,12 @@ public final class BrowserActivity extends AppCompatActivity {
         }
     }
 
+    private void returnTo(GeckoSession session, String previous) {
+        if (shuttingDown || !sessions.contains(session) || !session.isOpen()) return;
+        if (Boolean.TRUE.equals(backStates.get(session))) session.goBack();
+        else session.loadUri(previous);
+    }
+
     private void navigateBack() {
         if (ui.errorPanel.getVisibility() == View.VISIBLE) { finish(); return; }
         GeckoSession session = active();
@@ -315,13 +337,19 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private void showBlocked(NavigationPolicy.Decision decision) {
         int title = decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked
+                : decision == NavigationPolicy.Decision.BLOCK_COMMUNITY ? R.string.community_blocked
+                : decision == NavigationPolicy.Decision.BLOCK_RECOMMENDATION ? R.string.recommendation_blocked
                 : decision == NavigationPolicy.Decision.BLOCK_EXPIRED ? R.string.auth_expired : R.string.navigation_blocked;
         Toast.makeText(this, title, Toast.LENGTH_LONG).show();
     }
 
     private void showEntryError(NavigationPolicy.Decision decision) {
-        showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
-                decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
+        if (decision == NavigationPolicy.Decision.BLOCK_COMMUNITY) {
+            showError(R.string.community_blocked, R.string.community_blocked_body, false);
+        } else {
+            showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
+                    decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
+        }
         ui.siteInfo.setEnabled(false);
     }
 

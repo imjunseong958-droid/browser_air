@@ -24,7 +24,7 @@ public final class TaskNavigationTest {
     @Test public void mailWrappersAreResolvedToTheCheckedDestination() {
         assertEquals(FORM, NavigationPolicy.resolveLink(wrapper(FORM)));
         assertEquals(ALLOW, NavigationPolicy.entryDecision(wrapper(wrapper(FORM))));
-        assertEquals(BLOCK_SEARCH, NavigationPolicy.entryDecision(wrapper("https://google.com/search?q=test")));
+        assertEquals(BLOCK_SEARCH, NavigationPolicy.entryDecision(wrapper("https://www.bing.com/search?q=test")));
         assertEquals(ALLOW, loaded(FORM).evaluate(wrapper(FORM), false, true));
         assertEquals(BLOCK_SEARCH, loaded(FORM).evaluate(wrapper("https://google.com/"), false, true));
     }
@@ -53,7 +53,7 @@ public final class TaskNavigationTest {
 
     @Test public void discoveryIsBlockedEvenOnTheCurrentHostOrAfterApproval() {
         assertEquals(BLOCK_SEARCH, loaded("https://github.com/org/project").evaluate("https://github.com/search?q=x", false, true));
-        for (String url : new String[] {"https://youtube.com/", "https://youtube.com/results?search_query=x",
+        for (String url : new String[] {"https://youtube.com/", "https://youtube.com/shorts/x",
                 "https://youtube.com/feed/subscriptions", "https://x.com/home", "https://x.com/explore",
                 "https://docs.google.com/forms/", "https://drive.google.com/drive/u/0/my-drive"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
@@ -152,7 +152,7 @@ public final class TaskNavigationTest {
         assertEquals(ALLOW, policy.evaluate("https://files.example/receipt", false, false));
         for (int i = 0; i < 10; i++) assertEquals(ALLOW, policy.evaluate("https://hop" + i + ".example/", true, false));
         assertEquals(ALLOW, policy.evaluate(FORM, false, true));
-        assertEquals(BLOCK_SEARCH, policy.evaluate("https://google.com/search?q=x", true, false));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://duckduckgo.com/?q=x", true, false));
         assertEquals(BLOCK_SEARCH, policy.evaluate(wrapper("https://www.bing.com/search?q=x"), false, true));
     }
 }

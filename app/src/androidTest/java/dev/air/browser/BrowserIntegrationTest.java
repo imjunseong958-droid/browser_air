@@ -82,9 +82,32 @@ public final class BrowserIntegrationTest {
     }
 
     @Test public void searchEntryNeverStartsEngine() {
-        open("https://www.google.com/search?q=test");
+        open("https://www.bing.com/search?q=test");
         text("새로운 탐색은 여기서 멈춰요");
         scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
+    }
+
+    @Test public void communityEntryNeverStartsEngine() {
+        open("https://gall.dcinside.com/board/lists?id=test");
+        text("이 사이트는 AIR에서 열지 않아요");
+        scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
+    }
+
+    @Test public void homeSearchOpensSafeTextResults() {
+        Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        app.getSharedPreferences("HomeActivity", Context.MODE_PRIVATE).edit().putBoolean("setup_seen", true).commit();
+        var opened = InstrumentationRegistry.getInstrumentation().addMonitor(BrowserActivity.class.getName(), null, false);
+        try (var home = ActivityScenario.launch(HomeActivity.class)) {
+            text("필요한 것 검색").click();
+            UiObject2 field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
+            assertNotNull(field);
+            field.setText("night pharmacy");
+            text("Google").click();
+            var browser = InstrumentationRegistry.getInstrumentation().waitForMonitorWithTimeout(opened, 10_000);
+            assertNotNull("Search did not open the browser", browser);
+            assertEquals("https://www.google.com/search?q=night+pharmacy&udm=14&safe=active", browser.getIntent().getDataString());
+            browser.finish();
+        } finally { InstrumentationRegistry.getInstrumentation().removeMonitor(opened); }
     }
 
     @Test public void sameSiteAndCrossSiteLinksOpenWithoutAPrompt() {

@@ -2,6 +2,21 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## SafeSearch text search, community blocking and filtered DNS — 28 October 2026
+
+The home screen's search opens Google results with `safe=active&udm=14`; other Google search links are rewritten to that form, and other engines stay blocked. A fixed community list is refused on every route, and the engine resolves names only through Cloudflare's family DNS-over-HTTPS resolver.
+
+- **52 navigation/Firebase tests** (seven new search and community cases), **14 update tests**, and **10 release-publication tests** passed. Debug and optimized unsigned release builds passed; both Lint variants reported zero errors.
+- **48 Android 15 / API 35 emulator integration tests** passed (41 browser, seven updater), including a community entry, a non-Google search entry, and the home search opening the SafeSearch text URL. Local fixtures still load with DNS-over-HTTPS-only mode.
+- With network access on the emulator, a home search loaded Google's text results through the family resolver, tapping the image tab reloaded text results, and an adult domain showed AIR's connection error. The resolver answered `0.0.0.0` for that domain and mapped `www.google.com` to `forcesafesearch.google.com`.
+
+Before the YouTube rules below, a single video link reached YouTube's home feed and Shorts: YouTube changes its address in place, which never produced a load request. AIR now checks every address change and returns to the previous page when the new address is blocked. YouTube search opens from the home dialog; the home feed, subscriptions, and Shorts stay blocked; moving straight from one video to another is refused unless both are in the same chosen playlist; and a CSS-only built-in extension hides recommended videos, Shorts in results, and the Home/Shorts/You bar.
+
+- **56 navigation/Firebase tests** (eleven search, community, and YouTube cases) and the release, update, and Lint checks above passed again. **48 emulator integration tests** passed.
+- On the emulator, a YouTube video showed no recommended videos below the comments. Tapping the YouTube logo showed AIR's search toast and returned to the video. YouTube search from AIR showed regular results without Shorts or the bottom bar, and a result opened its video. Google results kept `safe=active&udm=14` when Google added its own parameter in place.
+
+Physical devices, networks that block DNS-over-HTTPS, communities outside the list, YouTube autoplay into another video, and YouTube's desktop layout were not tested.
+
 ## SMS sign-in removed — 28 October 2026
 
 Automatic SMS sign-in was removed: the built-in extension, consent receiver, code parser, footer toggle, and the Play services SMS dependency. Earlier entries that mention SMS describe the removed feature; their detailed records remain in Git history.
