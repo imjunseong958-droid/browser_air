@@ -93,6 +93,12 @@ public final class BrowserIntegrationTest {
         scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
     }
 
+    @Test public void adultEntryNeverStartsEngine() {
+        open("https://nimi.wiki/ko");
+        text("성인 사이트는 AIR에서 열 수 없어요.");
+        scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
+    }
+
     @Test public void homeSearchOpensSafeTextResults() {
         Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
         app.getSharedPreferences("HomeActivity", Context.MODE_PRIVATE).edit().putBoolean("setup_seen", true).commit();

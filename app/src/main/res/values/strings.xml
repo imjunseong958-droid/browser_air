@@ -34,9 +34,10 @@
     <string name="invalid_link_body">AIR는 HTTP 또는 HTTPS 웹 링크만 열 수 있어요.</string>
     <string name="search_blocked">새로운 탐색은 여기서 멈춰요</string>
     <string name="search_blocked_body">추천 목록과 다른 검색 엔진은 열지 않아요. 필요한 건 홈 화면의 검색으로 찾아보세요.</string>
-    <string name="community_blocked">이 사이트는 AIR에서 열지 않아요</string>
+    <string name="site_blocked">이 사이트는 AIR에서 열지 않아요</string>
     <string name="recommendation_blocked">추천 영상으로는 넘어가지 않아요. 보고 싶은 영상은 검색해서 열어주세요.</string>
     <string name="community_blocked_body">커뮤니티는 AIR에서 열 수 없어요. 필요한 정보는 홈 화면의 검색으로 찾아보세요.</string>
+    <string name="adult_blocked_body">성인 사이트는 AIR에서 열 수 없어요.</string>
     <string name="navigation_blocked">지금 작업과 연결되지 않은 이동이에요</string>
     <string name="navigation_blocked_body">열린 작업에 필요한 연결인지 확인할 수 없어요. 원래 링크에서 다시 시작해 주세요.</string>
     <string name="camera_denied">카메라 권한이 필요해요</string>
