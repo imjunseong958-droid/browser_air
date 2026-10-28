@@ -71,7 +71,6 @@ dependencies {
     implementation(project(":updates"))
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.browser:browser:1.10.0")
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
     implementation("org.mozilla.geckoview:geckoview:158.0.20261007201254")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test:runner:1.7.0")

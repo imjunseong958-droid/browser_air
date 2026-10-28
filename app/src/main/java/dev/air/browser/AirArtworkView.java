@@ -32,7 +32,7 @@ public final class AirArtworkView extends View {
         arch.cubicTo(-46, -78, 46, -78, 46, -18); arch.lineTo(46, 58);
         canvas.drawPath(arch, paint);
         canvas.drawLine(-79, 58, 82, 58, paint);
-        paint.setColor(getContext().getColor(R.color.line));
+        paint.setColor(getContext().getColor(R.color.breeze));
         Path breeze = new Path();
         breeze.moveTo(-136, 14); breeze.cubicTo(-88, -17, -86, 28, -62, 9);
         canvas.drawPath(breeze, paint);

@@ -6,13 +6,13 @@
     android:orientation="vertical"
     android:background="@color/paper">
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center_vertical" android:paddingHorizontal="8dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center_vertical" android:paddingStart="4dp" android:paddingEnd="12dp">
         <ImageButton android:id="@+id/backButton" android:layout_width="48dp" android:layout_height="48dp" android:background="?attr/selectableItemBackgroundBorderless" android:src="@drawable/ic_back" android:contentDescription="@string/back" />
-        <LinearLayout android:id="@+id/siteInfo" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:orientation="vertical" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:background="?attr/selectableItemBackground" android:clickable="true" android:focusable="true" android:contentDescription="@string/connection_details">
+        <LinearLayout android:id="@+id/siteInfo" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:layout_marginStart="2dp" android:orientation="vertical" android:gravity="center_vertical" android:paddingHorizontal="14dp" android:background="@drawable/bg_site_pill" android:clickable="true" android:focusable="true" android:contentDescription="@string/connection_details">
             <TextView android:id="@+id/hostLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/ink" android:textSize="14sp" android:maxLines="1" android:ellipsize="end" android:fontFamily="sans-serif-medium" />
-            <TextView android:id="@+id/scopeLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="@string/site_locked" android:textColor="@color/muted" android:textSize="10sp" />
+            <TextView android:id="@+id/scopeLabel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="1dp" android:text="@string/auth_session" android:textColor="@color/muted" android:textSize="11sp" android:maxLines="1" android:ellipsize="end" android:visibility="gone" />
         </LinearLayout>
-        <Button android:id="@+id/finishButton" android:layout_width="72dp" android:layout_height="48dp" android:background="?attr/selectableItemBackground" android:text="@string/finish_session" android:textAllCaps="false" android:textSize="13sp" android:textColor="@color/ink" />
+        <Button android:id="@+id/finishButton" style="@style/Air.TonalButton" android:layout_width="wrap_content" android:layout_height="40dp" android:layout_marginStart="10dp" android:text="@string/finish_session" android:textSize="14sp" />
     </LinearLayout>
 
     <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="2dp" android:progressTint="@color/ink" android:progressBackgroundTint="@color/line" />
@@ -20,9 +20,9 @@
     <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
         <org.mozilla.geckoview.GeckoView android:id="@+id/geckoView" android:layout_width="match_parent" android:layout_height="match_parent" />
         <LinearLayout android:id="@+id/errorPanel" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center" android:padding="32dp" android:background="@color/paper" android:visibility="gone">
-            <ImageView android:layout_width="86dp" android:layout_height="86dp" android:src="@drawable/ic_air" android:importantForAccessibility="no" />
-            <TextView android:id="@+id/errorTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:gravity="center" android:textColor="@color/ink" android:textSize="23sp" android:fontFamily="sans-serif-medium" />
-            <TextView android:id="@+id/errorBody" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:gravity="center" android:textColor="@color/muted" android:textSize="14sp" android:lineSpacingExtra="6dp" />
+            <ImageView android:layout_width="104dp" android:layout_height="104dp" android:background="@drawable/bg_icon_circle" android:padding="14dp" android:src="@drawable/ic_air" android:importantForAccessibility="no" />
+            <TextView android:id="@+id/errorTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp" android:gravity="center" android:textColor="@color/ink" android:textSize="22sp" android:textStyle="bold" />
+            <TextView android:id="@+id/errorBody" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:textColor="@color/muted" android:textSize="15sp" android:lineSpacingMultiplier="1.35" />
             <Button android:id="@+id/retryButton" style="@style/Air.PrimaryButton" android:layout_width="match_parent" android:layout_height="56dp" android:layout_marginTop="28dp" android:text="@string/retry" />
         </LinearLayout>
     </FrameLayout>

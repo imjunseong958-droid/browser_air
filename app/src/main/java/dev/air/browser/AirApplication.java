@@ -12,7 +12,7 @@ public final class AirApplication extends Application {
     private GeckoRuntime runtime;
     private GeckoResult<WebExtension> extensionsReady;
 
-    /** The home screen and QR camera do not start the browser engine. */
+    /** The home screen does not start the browser engine. */
     public synchronized GeckoRuntime runtime() {
         if (runtime == null) {
             GeckoRuntimeSettings settings = new GeckoRuntimeSettings.Builder()
