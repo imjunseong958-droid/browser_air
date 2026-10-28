@@ -132,6 +132,37 @@ public final class SearchAndCommunityTest {
         }
     }
 
+    @Test public void adultSitesNeverOpenByAnyRoute() {
+        for (String url : new String[] {"https://nimi.wiki/ko", "https://www.nimi.wiki/ko/popular", "https://twidouga.net/ko/",
+                "https://twitter.net/", "http://www.twitter.net/home", "https://m.TWITTER.NET./i",
+                "https://www.pornhub.com/", "https://xvideos2.com/", "https://ko.xhamster18.desi/", "https://hentai-site.example/",
+                "https://yadong24.net/", "https://anything.xxx/", "https://shop.adult/", "https://pages.sex/"}) {
+            assertEquals(url, BLOCK_ADULT, NavigationPolicy.entryDecision(url));
+            var policy = loaded("https://example.com/");
+            assertEquals(url, BLOCK_ADULT, policy.evaluate(url, false, true));
+            assertEquals(url, BLOCK_ADULT, policy.evaluate(url, true, false));
+            assertEquals(url, BLOCK_ADULT, policy.evaluateFrame(url));
+            assertEquals(url, BLOCK_ADULT, NavigationPolicy.pageChange("https://example.com/", url));
+            assertEquals(url, "example.com", policy.lockedHost());
+        }
+        assertEquals(BLOCK_ADULT, NavigationPolicy.entryDecision(wrapper("https://nimi.wiki/ko")));
+        assertEquals(BLOCK_ADULT, loaded(SAFE).evaluate(wrapper("https://twitter.net/"), false, true));
+        assertThrows(IllegalArgumentException.class, () -> new NavigationPolicy("https://twitter.net/"));
+        var signIn = new NavigationPolicy("https://accounts.google.com/AccountChooser?continue="
+                + encode("https://twitter.net/") + "&service=wise");
+        assertFalse(signIn.isAuthenticating());
+        assertEquals(BLOCK_ADULT, signIn.evaluate("https://twitter.net/", true, false));
+    }
+
+    @Test public void xAndOrdinarySitesAreNotAdult() {
+        for (String url : new String[] {"https://x.com/AirApp/status/1", "https://twitter.com/AirApp",
+                "https://api.twitter.com/oauth/authorize?oauth_token=t", "https://www.sussex.ac.uk/", "https://www.essex.gov.uk/",
+                "https://twitter.network.example/", "https://nimi.wiki.example/", "https://example.com/porn-statistics",
+                "https://www.sextant.example/", "https://namu.wiki/w/x"}) {
+            assertEquals(url, ALLOW, NavigationPolicy.entryDecision(url));
+        }
+    }
+
     @Test public void googleSignInCannotReturnToACommunity() {
         var policy = new NavigationPolicy("https://accounts.google.com/AccountChooser?continue="
                 + encode("https://www.reddit.com/") + "&service=wise");

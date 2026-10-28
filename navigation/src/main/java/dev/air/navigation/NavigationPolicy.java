@@ -10,12 +10,13 @@ import java.util.Set;
 import java.util.function.LongSupplier;
 
 /**
- * Search opens only as Google SafeSearch text results, and discovery feeds and communities stay blocked;
+ * Search opens only as Google SafeSearch text results, and discovery feeds, communities and adult sites stay blocked;
  * any other web destination becomes the current task.
  */
 public final class NavigationPolicy {
     public enum Decision {
-        ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_COMMUNITY, BLOCK_RECOMMENDATION, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED
+        ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_COMMUNITY, BLOCK_ADULT, BLOCK_RECOMMENDATION, BLOCK_SITE, BLOCK_INVALID,
+        BLOCK_EXPIRED
     }
 
     private static final long AUTH_TIMEOUT_MS = 15 * 60 * 1000L;
@@ -49,7 +50,7 @@ public final class NavigationPolicy {
     public NavigationPolicy(String initialUrl, LongSupplier clock) {
         this.clock = clock;
         site = WebAddress.parse(resolveLink(initialUrl));
-        if (site == null || isSearch(site) || isCommunity(site)) throw new IllegalArgumentException("Invalid entry URL");
+        if (site == null || isSearch(site) || refused(site) != null) throw new IllegalArgumentException("Invalid entry URL");
         pendingInitial = site;
         task = new TaskScope(site);
         WebAddress returning = googleSignInReturn(site);
@@ -76,7 +77,7 @@ public final class NavigationPolicy {
     public static Decision pageChange(String from, String to) {
         WebAddress target = WebAddress.parse(to);
         if (target == null) return Decision.ALLOW;
-        if (isCommunity(target)) return Decision.BLOCK_COMMUNITY;
+        if (refused(target) != null) return refused(target);
         if (isSearch(target)) return Decision.BLOCK_SEARCH;
         return WebLinks.isRecommendationHop(WebAddress.parse(from), target) ? Decision.BLOCK_RECOMMENDATION : Decision.ALLOW;
     }
@@ -84,7 +85,7 @@ public final class NavigationPolicy {
     public static Decision entryDecision(String url) {
         WebAddress address = WebAddress.parse(resolveLink(url));
         if (address == null) return Decision.BLOCK_INVALID;
-        if (isCommunity(address)) return Decision.BLOCK_COMMUNITY;
+        if (refused(address) != null) return refused(address);
         return isSearch(address) ? Decision.BLOCK_SEARCH : Decision.ALLOW;
     }
 
@@ -121,7 +122,7 @@ public final class NavigationPolicy {
         url = resolveLink(url);
         if (url == null) return Decision.BLOCK_INVALID;
         WebAddress target = WebAddress.parse(url);
-        if (target != null && isCommunity(target)) return Decision.BLOCK_COMMUNITY;
+        if (target != null && refused(target) != null) return refused(target);
         if (target != null && isSearch(target)) return Decision.BLOCK_SEARCH;
         AuthTransaction returning = callbackTransaction(url);
         if (returning != null) {
@@ -242,7 +243,7 @@ public final class NavigationPolicy {
     public Decision evaluateFrame(String url) {
         WebAddress target = WebAddress.parse(url);
         if (target == null) return Decision.BLOCK_INVALID;
-        if (isCommunity(target)) return Decision.BLOCK_COMMUNITY;
+        if (refused(target) != null) return refused(target);
         return isSearch(target) && !isCaptcha(target) ? Decision.BLOCK_SEARCH : Decision.ALLOW;
     }
 
@@ -361,7 +362,7 @@ public final class NavigationPolicy {
     }
 
     private static boolean validWebReturn(WebAddress target) {
-        return target.scheme().equals("https") && !isSearch(target) && !isCommunity(target)
+        return target.scheme().equals("https") && !isSearch(target) && refused(target) == null
                 && !Set.of("accounts.google.com", "accounts.google.co.kr").contains(target.host());
     }
 
@@ -387,6 +388,12 @@ public final class NavigationPolicy {
 
     public static boolean isCommunity(WebAddress url) {
         return WebLinks.isCommunity(url);
+    }
+
+    /** Communities and adult sites never open, whatever route reaches them; null for anything else. */
+    private static Decision refused(WebAddress url) {
+        if (WebLinks.isAdult(url)) return Decision.BLOCK_ADULT;
+        return isCommunity(url) ? Decision.BLOCK_COMMUNITY : null;
     }
 
     private static final class WebLogin {

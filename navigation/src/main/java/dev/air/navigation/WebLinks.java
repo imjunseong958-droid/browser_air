@@ -2,6 +2,7 @@ package dev.air.navigation;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +20,18 @@ final class WebLinks {
             "humoruniv.com", "todayhumor.co.kr", "inven.co.kr", "arca.live", "pann.nate.com", "82cook.com",
             "dogdrip.net", "ygosu.com", "slrclub.com", "damoang.net",
             "reddit.com", "redd.it", "4chan.org", "4channel.org", "9gag.com");
+    /**
+     * Adult sites, including their subdomains. X video rankings are mostly adult videos; nimi.wiki (트위터닷넷, 니미위키)
+     * passes the family resolver. twitter.net is not X.
+     */
+    private static final Set<String> ADULT_DOMAINS = Set.of(
+            "nimi.wiki", "twitter.net", "twidouga.net", "twivideo.net", "twiigle.com");
+    /** Names only adult sites put in a host, which also catches the numbered mirrors they move between. */
+    private static final List<String> ADULT_NAMES = List.of(
+            "porn", "xxx", "hentai", "xvideo", "xnxx", "xhamster", "redtube", "spankbang", "eporner", "brazzers",
+            "onlyfans", "chaturbate", "stripchat", "bongacams", "livejasmin", "missav", "yadong");
+    /** Top-level domains reserved for adult content. */
+    private static final Set<String> ADULT_TLDS = Set.of("xxx", "porn", "sex", "adult");
 
     private WebLinks() {}
 
@@ -87,8 +100,20 @@ final class WebLinks {
     }
 
     static boolean isCommunity(WebAddress address) {
+        return within(address.host(), COMMUNITY_DOMAINS);
+    }
+
+    static boolean isAdult(WebAddress address) {
         String host = address.host();
-        for (String domain : COMMUNITY_DOMAINS) {
+        if (within(host, ADULT_DOMAINS) || ADULT_TLDS.contains(host.substring(host.lastIndexOf('.') + 1))) return true;
+        for (String name : ADULT_NAMES) {
+            if (host.contains(name)) return true;
+        }
+        return false;
+    }
+
+    private static boolean within(String host, Set<String> domains) {
+        for (String domain : domains) {
             if (host.equals(domain) || host.endsWith("." + domain)) return true;
         }
         return false;

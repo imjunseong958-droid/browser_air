@@ -2,6 +2,13 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Adult sites the family resolver misses — 28 October 2026
+
+nimi.wiki, the X video ranking known as 트위터닷넷 or 니미위키, resolved normally through `family.cloudflare-dns.com`, while pornhub.com, twidouga.net, twivideo.net, and twiigle.com answered `0.0.0.0`. The literal twitter.net domain also passed the resolver; it currently redirects to a domain-for-sale page. AIR now refuses these on every route itself, with a separate adult-site message.
+
+- **58 navigation/Firebase tests** (two new adult-site cases: listed domains, name rules, adult TLDs, Google wrappers, Google sign-in returns, and X, twitter.com, sussex.ac.uk, and namu.wiki staying open) and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
+- **12 Android 15 / API 35 emulator browser integration tests** passed, including a nimi.wiki entry that shows the adult-site message without starting the engine.
+
 ## SafeSearch text search, community blocking and filtered DNS — 28 October 2026
 
 The home screen's search opens Google results with `safe=active&udm=14`; other Google search links are rewritten to that form, and other engines stay blocked. A fixed community list is refused on every route, and the engine resolves names only through Cloudflare's family DNS-over-HTTPS resolver.
