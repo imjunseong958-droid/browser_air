@@ -1,13 +1,15 @@
 plugins { id("com.android.application") }
 
 val airVersionCode = providers.environmentVariable("AIR_VERSION_CODE")
-    .orElse(providers.gradleProperty("airVersionCode")).get().toIntOrNull()
-require(airVersionCode != null && airVersionCode in 1..2_100_000_000) {
+    .orElse(providers.gradleProperty("airVersionCode")).get().toIntOrNull() ?: 0
+require(airVersionCode in 1..2_100_000_000) {
     "AIR_VERSION_CODE / airVersionCode must be a positive integer at most 2100000000."
 }
-val airBaseVersionName = providers.gradleProperty("airVersionName").get()
-val airVersionName = if (providers.environmentVariable("AIR_VERSION_CODE").isPresent)
-    "$airBaseVersionName+$airVersionCode" else airBaseVersionName
+val airReleaseBuild = providers.environmentVariable("AIR_VERSION_CODE").isPresent
+require(!airReleaseBuild || airVersionCode > 1000) { "AIR_VERSION_CODE must be above 1000 for a release." }
+// Release versionCode 1000 + N reads as a plain major.minor.N, so 1052 is shown as 0.1.52.
+val airVersionName = providers.gradleProperty("airVersionName").get() + "." +
+    (if (airReleaseBuild) airVersionCode - 1000 else airVersionCode)
 require(airVersionName.matches(Regex("[0-9A-Za-z.+_-]{1,64}"))) { "Invalid AIR version name." }
 
 val airSigning = listOf("AIR_KEYSTORE_PATH", "AIR_KEYSTORE_PASSWORD", "AIR_KEY_ALIAS", "AIR_KEY_PASSWORD")

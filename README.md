@@ -26,7 +26,7 @@ On the first in-app update, Android may require enabling **Allow from this sourc
 
 Updates preserve app data, including settings and the Gecko profile containing cookies and site storage, when the package name and signing certificate match. AIR verifies the downloaded file's size, SHA-256, application ID, version, minimum Android version, ARM64 libraries, and installed signing certificate before offering it to Android. Downloads use HTTPS and are limited to this repository's release URLs and GitHub's release-asset hosts. The updater has no GitHub token and never exposes browser storage to the installer.
 
-CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. `airVersionName` in `gradle.properties` is the base version; builds with `AIR_VERSION_CODE` set append the code, such as `0.1.2+1010`, to distinguish successive builds.
+CI assigns each new main-branch workflow run a higher `versionCode` (`1000 + GITHUB_RUN_NUMBER`); rerunning an existing run keeps its version code. `airVersionName` in `gradle.properties` is the major and minor version; a release build numbers the last part from its version code, so versionCode `1052` is shown as `0.1.52`. Releases before this change were named like `0.1.3+1049`. Local builds without `AIR_VERSION_CODE` use `airVersionCode`, such as `0.1.3`.
 
 **Enabling in-app updates:** releases made before this feature must be updated manually once by installing a newer `AIR.apk`. Subsequent releases can be downloaded and installed through AIR's update button. Manual APK installation remains available; do not uninstall AIR before updating an existing release.
 

@@ -10,6 +10,7 @@ Tapping the update button installed the release remembered from the last check, 
 - **19 Android 15 / API 35 emulator integration tests** passed, including a check that installing a remembered release clears the 24-hour wait. The home search test passed three times in a row after the card was fixed in place; before, it once opened YouTube when Google was tapped.
 - On the emulator, with a stale remembered release (`0.1.3-stale`) on the button, tapping it offered the newest public release, **0.1.3+1049**, instead.
 - The new artifact actions run only on main, so the release run after merging is their first real use.
+- Release version names are now plain `0.1.N`: a build with `AIR_VERSION_CODE=1052` reported `versionName='0.1.52'` in `aapt dump badging`, a local build kept `0.1.3`, and `AIR_VERSION_CODE=999` was rejected. Release-publication tests (10) passed.
 
 ## Spotlight search, quieter screens, and no built-in QR scanner — 28 October 2026
 
