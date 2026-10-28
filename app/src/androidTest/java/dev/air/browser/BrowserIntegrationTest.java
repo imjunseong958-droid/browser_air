@@ -98,7 +98,7 @@ public final class BrowserIntegrationTest {
         app.getSharedPreferences("HomeActivity", Context.MODE_PRIVATE).edit().putBoolean("setup_seen", true).commit();
         var opened = InstrumentationRegistry.getInstrumentation().addMonitor(BrowserActivity.class.getName(), null, false);
         try (var home = ActivityScenario.launch(HomeActivity.class)) {
-            text("필요한 것 검색").click();
+            text("검색").click();
             UiObject2 field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
             assertNotNull(field);
             field.setText("night pharmacy");

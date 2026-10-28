@@ -1,6 +1,6 @@
 # AIR — Only the connections you need
 
-AIR is an Android app for QR links, forms, documents, web sign-ins, and links opened from other apps. It keeps practical web features available while limiting habitual browsing: search shows Google SafeSearch text results only, recommendation feeds and communities are blocked, and adult domains do not resolve. Links, redirects, and pages opened from them otherwise work normally.
+AIR is an Android app for forms, documents, web sign-ins, and links opened from other apps, including QR codes scanned with the phone's camera app. It keeps practical web features available while limiting habitual browsing: search shows Google SafeSearch text results only, recommendation feeds and communities are blocked, and adult domains do not resolve. Links, redirects, and pages opened from them otherwise work normally.
 
 AIR has no address bar, search suggestions, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
 
@@ -36,8 +36,8 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 
 ## What it does
 
-- Opens external HTTP/HTTPS links and scans QR codes with the camera.
-- **필요한 것 검색** on the home screen opens one typed query as Google results with `safe=active` and `udm=14` (text links only). Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked. The dialog's **YouTube** button opens YouTube search results instead.
+- Opens external HTTP/HTTPS links, including QR codes scanned with the phone's camera app when AIR is the default browser. AIR has no built-in QR scanner.
+- **검색** on the home screen opens a spotlight-style search over the home screen. A typed query opens as Google results with `safe=active` and `udm=14` (text links only), the keyboard's search key or the Google row; the YouTube row opens YouTube search results instead. Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked.
 - On YouTube, search results and videos open, but the home feed, subscriptions, and Shorts do not. Moving straight from one video to another (a recommendation, autoplay, or a `youtu.be` link) is refused unless both videos are in the same chosen playlist; YouTube's generated mixes (`list=RD…`) do not count. A small built-in extension (`app/src/main/assets/youtube-calm`, CSS only) hides the recommended videos under a video, Shorts shelves in search results, and the Home/Shorts/You bar.
 - Checks every address change, not only page loads. Sites such as YouTube change their own address without loading a page; a change to a blocked route is undone by returning to the previous page.
 - Resolves up to eight initial HTTP redirects, including shortened QR links, then pins the session to the final site once the first document is displayed.
@@ -91,7 +91,6 @@ The application uses **Java 17**, **Android Views**, and **GeckoView**. GeckoVie
 | targetSdk / minSdk | 37 / 29 |
 | GeckoView | 158.0.20261007201254 |
 | AndroidX Browser | 1.10.0 |
-| ZXing Android Embedded | 4.3.0 |
 
 Open this folder in Android Studio, or install JDK 17 and the Android SDK, then run:
 
@@ -102,7 +101,7 @@ bash scripts/build.sh
 Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK location. The script can use local runtimes under `.tools/` when available. Its default debug build generates a local debug signing key and writes `artifacts/debug/AIR.apk`; use that APK only for development. It is not interchangeable with the release APK. Keep the browser engine updated for security, and rerun authentication, navigation-policy, and device checks when changing engine versions.
 
 - `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
-- `app/`: native screens, QR scanning, browser sessions, Custom Tabs, and callbacks to other apps.
+- `app/`: native screens, browser sessions, Custom Tabs, and callbacks to other apps.
 - `app/src/main/assets/youtube-calm/`: the YouTube hiding rules. GeckoView keeps installed built-in extensions, so raise `version` in its `manifest.json` whenever the CSS changes.
 - `updates/`: release URL and version policy, bounded HTTPS transfers, checksum checks, and JVM regression tests.
 - `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint, policy tests, and publication tests before uploading the **AIR** artifact. A separate main-only job with repository write permission publishes GitHub Releases.
@@ -143,4 +142,4 @@ Verification uses a local HTTP server and test callback receivers without real a
 
 ## Third-party components
 
-GeckoView is distributed under the Mozilla Public License 2.0, and AndroidX and ZXing use Apache License 2.0. AIR consumes an unmodified GeckoView engine from Maven. Component notices and original-source references are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+GeckoView is distributed under the Mozilla Public License 2.0, and AndroidX uses Apache License 2.0. AIR consumes an unmodified GeckoView engine from Maven. Component notices and original-source references are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

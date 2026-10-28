@@ -72,19 +72,10 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".ScanActivity"
-            android:exported="false"
-            android:screenOrientation="portrait"
-            tools:ignore="LockedOrientationActivity" />
-
         <service android:name=".AirCustomTabsService" android:exported="true">
             <intent-filter>
                 <action android:name="android.support.customtabs.action.CustomTabsService" />
             </intent-filter>
         </service>
-
-        <!-- ZXing's default capture screen is replaced by AIR's own screen. -->
-        <activity android:name="com.journeyapps.barcodescanner.CaptureActivity" tools:node="remove" />
     </application>
 </manifest>

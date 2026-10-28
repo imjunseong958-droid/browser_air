@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -10,52 +11,37 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:paddingHorizontal="32dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="28dp">
+        android:paddingHorizontal="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp">
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="40dp" android:gravity="center_vertical">
-            <ImageView android:layout_width="36dp" android:layout_height="36dp" android:src="@drawable/ic_air" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/app_name" android:textColor="@color/ink" android:textSize="23sp" android:letterSpacing="0.12" android:fontFamily="sans-serif-medium" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical">
+            <ImageView android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_logo_badge" android:src="@drawable/ic_air" app:tint="@color/paper" android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/app_name" android:textColor="@color/ink" android:textSize="20sp" android:textStyle="bold" android:letterSpacing="0.1" />
         </LinearLayout>
 
-        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="0.7" />
+        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1" />
 
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/home_eyebrow" android:textColor="@color/muted" android:textSize="10sp" android:letterSpacing="0.18" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="19dp" android:text="@string/home_title" android:textColor="@color/ink" android:textSize="32sp" android:lineSpacingExtra="7dp" android:fontFamily="sans-serif-medium" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="@string/home_body" android:textColor="@color/muted" android:textSize="14sp" android:lineSpacingExtra="7dp" />
+        <dev.air.browser.AirArtworkView android:layout_width="match_parent" android:layout_height="200dp" android:importantForAccessibility="no" />
 
-        <dev.air.browser.AirArtworkView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="2.4" android:importantForAccessibility="no" />
-
-        <androidx.appcompat.widget.AppCompatButton
-            android:id="@+id/scanButton"
-            style="@style/Air.PrimaryButton"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:drawableStart="@drawable/ic_qr"
-            android:drawablePadding="12dp"
-            android:text="@string/scan_qr" />
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/searchButton"
-            style="@style/Widget.AppCompat.Button.Borderless"
+            style="@style/Air.SearchPill"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="6dp"
+            android:layout_height="58dp"
+            android:layout_marginTop="32dp"
             android:text="@string/search_open"
-            android:textAllCaps="false"
-            android:textColor="@color/ink"
-            android:textSize="14sp" />
-        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="11dp" android:gravity="center" android:text="@string/home_hint" android:textColor="@color/muted" android:textSize="12sp" />
+            app:drawableStartCompat="@drawable/ic_search"
+            app:drawableTint="@color/ink" />
+        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1.4" />
 
-        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="0.65" />
-
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="@string/home_footer" android:textColor="@color/muted" android:textSize="12sp" />
+        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/muted" android:textSize="12sp" android:visibility="gone" />
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/updateButton"
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="4dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
             android:text="@string/update_check"
             android:textAllCaps="false"
             android:textColor="@color/muted"

@@ -2,6 +2,14 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Spotlight search, quieter screens, and no built-in QR scanner — 28 October 2026
+
+Home search is now a spotlight-style overlay: a floating search field near the top over a dimmed home screen (blurred on Android 12 and later), with Google and YouTube rows that appear once a query is typed. The home screen keeps only the logo, illustration, search bar, a default-browser hint when AIR is not the default, and the update button; slogan and guide copy was removed there, in search, and in block messages. Dialogs use rounded cards and bolder titles, the browser header is a back button, a site pill, and a **끝내기** pill, and Korean text breaks between phrases on Android 13 and later. The built-in QR scanner and the ZXing dependency were removed; the phone's camera app opens QR links in AIR when AIR is the default browser. The camera permission remains for websites.
+
+- **56 navigation/Firebase tests** and **14 update tests** passed. Debug and optimized release builds passed; both Lint variants reported zero errors.
+- **18 Android 15 / API 35 emulator integration tests** passed (11 browser, seven updater), including home search through the new overlay.
+- Screens were checked on the emulator: home, the search overlay empty and with a query, a blocked entry, a loaded page header, and the first-run dialog. Physical devices, dark mode, and Android 10–11 (no blur) were not checked.
+
 ## SafeSearch text search, community blocking and filtered DNS — 28 October 2026
 
 The home screen's search opens Google results with `safe=active&udm=14`; other Google search links are rewritten to that form, and other engines stay blocked. A fixed community list is refused on every route, and the engine resolves names only through Cloudflare's family DNS-over-HTTPS resolver.

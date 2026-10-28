@@ -316,7 +316,7 @@ public final class BrowserActivity extends AppCompatActivity {
     private void updateSiteLabel(String url) {
         WebAddress address = WebAddress.parse(url);
         ui.hostLabel.setText(address == null ? getString(R.string.app_name) : address.host());
-        ui.scopeLabel.setText(isAuthenticating() ? R.string.auth_session : R.string.site_locked);
+        ui.scopeLabel.setVisibility(isAuthenticating() ? View.VISIBLE : View.GONE);
     }
 
     private void showConnectionDetails() {
@@ -351,6 +351,7 @@ public final class BrowserActivity extends AppCompatActivity {
                     decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
         }
         ui.siteInfo.setEnabled(false);
+        ui.siteInfo.setVisibility(View.INVISIBLE);
     }
 
     private void showError(int title, int body, boolean retry) {

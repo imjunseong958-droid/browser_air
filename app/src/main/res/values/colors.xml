@@ -2,8 +2,12 @@
 <resources>
     <color name="paper">#F6F5F0</color>
     <color name="ink">#223D35</color>
+    <color name="ink_pressed">#305C4B</color>
     <color name="muted">#68736A</color>
     <color name="line">#DCE1D8</color>
     <color name="sage">#E8EDE4</color>
+    <color name="mint">#DDE7DB</color>
+    <color name="mint_pressed">#C9D8C7</color>
+    <color name="breeze">#C3CEBF</color>
     <color name="white">#FFFFFF</color>
 </resources>
