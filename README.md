@@ -56,25 +56,12 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 - Identifies Custom Tabs callers through their Binder UID. HTTPS callbacks are delivered to the verified calling app or completed inside AIR. There is no button to hand a blocked page to another browser.
 - Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions.
 - Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream and are limited to 100 MB.
-- Offers optional SMS sign-in on HTTPS pages using Google's SMS User Consent API on **all supported Android versions**. Enable **문자 자동 로그인 켜기** once; AIR remembers the setting and waits on recognized verification screens. Each new message requires Android's **Allow** tap before AIR receives its text, fills a single OTP field or a 4–10-character split widget, and activates a uniquely identified verification/sign-in button. Labelled OTP inputs also work without `autocomplete="one-time-code"`. AIR observes form submission events to avoid submitting again; ambiguous codes/fields retain a selection fallback. The APK declares no SMS receive/read/send permissions.
 - Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Notification, autoplay, and tracking-exception requests are denied.
 - Displays the current site in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
 
 ## Compatibility and limits
 
-SMS sign-in requires a new SMS received on the same device while the verification screen is in the foreground. The enabled setting persists across pages and app restarts; tap the footer's **끄기** to turn it off. Each receive window is bounded to five minutes and is discarded on navigation, popup/session changes, backgrounding (except Android's own message-consent dialog), or completion. Returning to a recognized empty OTP screen starts a fresh wait. Existing inbox messages, email/RCS codes, and embedded-frame inputs are not supported. Hidden, disabled, read-only, edited, or mismatched-length inputs are not filled, and unrelated payment/purchase/transfer/delete controls are not activated. Unknown forms retain manual input.
-
-SMS sign-in requires working Google Play services on every supported Android version; other devices retain manual input. The [SMS User Consent API](https://developers.google.com/identity/sms-retriever/user-consent/overview) offers one-message access after approval, rather than direct SMS reception. It detects eligible 4–10-character alphanumeric codes containing a digit and excludes messages from senders in Contacts. Denying consent or approving an unrelated/wrong-host message leaves the form untouched and ends that receive window. Custom forms and additional CAPTCHA/identity steps may still require interaction.
-
-After Allow, AIR waits up to ten seconds for the visible OTP widget and up to eight seconds for input acceptance and a verification button. If the site clears the code or replaces the input, AIR retries once in the original form/group when an empty, uniquely identified widget is available. User edits stop completion. Formless layouts can use a nearby, unambiguous login button. A rejected value is not reported as filled; timeouts retain a short-lived manual-code dialog. When the code remains filled but AIR cannot activate a verification button, it asks you to finish on the site. Activating a button means verification was attempted; the site determines whether login succeeds.
-
-After message approval, AIR can also identify a single unnamed or length-limited code input beside a name field without asking which field to use. Name, birth-date, phone, password, CAPTCHA and coupon fields are excluded from this inference; genuinely ambiguous controls retain the selection fallback. Phone-prefixed code names such as `mobileAuthCode` are recognized. Labels, accessibility descriptions and placeholders are considered together so a country-code or countdown label cannot hide a phone/OTP hint. Phone entry controls are excluded from code selection and checked again before insertion. The receive window survives a same-document transition that removes the request-code button.
-
-For an identified single code input, AIR first uses GeckoView's Android keyboard connection so controlled forms receive a real input event even when their login button is already enabled. If that connection or its surrounding text is not ready after focus/consent, AIR rechecks the same focused control and retries readiness for up to two seconds (at most ten requests). An attempted write or an unacknowledged request is never repeated. It requires the same focused control to remain empty or contain only that exact code; unavailable or rejected native insertion retains bounded DOM fallback. Formless logins can locate a sibling button through up to eight input wrappers, without borrowing another form's button or crossing another OTP widget. Codes are never copied to the clipboard. AIR checks the live value after a verification click. If it cannot activate verification, it shows an incomplete-login dialog with the approved code instead of claiming that the code was entered.
-
-Split widgets whose first box accepts the whole autofilled code (as on Coupang's mobile code step) are filled as one group, and a code that a site moves from one box into the following boxes is accepted only when those boxes contain exactly that code. A transparent `one-time-code` input laid over decorative digit slots is recognized; other transparent inputs are not. When no control is labelled, the unnamed control the site focused can be used after message approval; phone, name, password and coupon controls are still excluded. If automatic input stops, the fallback dialog names a fixed cause (no code field, value changed by the site, edited, no active button, or no response) without logging page values.
-
-Removing SMS permissions avoids a known sensitive-permission condition in [Google Play Protect's guidance for sideloaded apps](https://developers.google.com/android/play-protect/warning-dev-guidance). It does not guarantee that every device/manufacturer warning disappears. Verify installation and a subsequent in-app update on the affected physical device; AIR's package name and release signing key must stay the same. Release-manifest generation rejects actual APK metadata that declares SMS receive/read/send permissions.
+AIR does not read SMS messages or fill verification codes. Type the code on the site, or use your keyboard's suggestion, such as the clipboard chip Gboard shows after tapping **Copy code** in a message notification. Release-manifest generation rejects APK metadata that declares SMS receive/read/send permissions, a known sensitive-permission condition in [Google Play Protect's guidance for sideloaded apps](https://developers.google.com/android/play-protect/warning-dev-guidance).
 
 **Real-service login compatibility has not been verified across all providers.** Google, Kakao, Naver, and banking apps still need testing with real accounts on physical devices. Apps that require a specific Chrome package or signature, custom SAML or native authentication flows, unfamiliar CAPTCHA or payment domains, DRM, and provider-specific browser policies may need additional implementation or testing. AIR does not advertise unverified support for Auth Tab, Trusted Web Activities, Digital Asset Links, or Custom Tabs postMessage.
 
@@ -87,8 +74,6 @@ HTTP links are supported for uses such as restaurant menus, with an unencrypted-
 ## Privacy
 
 AIR has no app-owned analytics SDK, advertising SDK, server, or account system, and does not add URL or authentication-code logging. Session lists and navigation policies live in memory. Cookies and site storage needed for sign-in are kept in the device's Gecko profile and can be removed by clearing app data or uninstalling AIR. Cloud backup and device-to-device data transfer are disabled.
-
-SMS sign-in is off until explicitly enabled. Google's SMS User Consent API grants AIR access only to the newly approved message on every supported Android version. A dynamically registered receiver is protected by Play services' sender permission and is active only while waiting on a recognized foreground verification page. AIR does not request SMS receive/read/send permissions, notification access, or the default SMS-app role. Message text is parsed locally and discarded; codes stay briefly in memory and go only to the selected controls in that same document. AIR does not save messages/codes, copy them to the clipboard, or send them to an AIR server. Domain-bound SMS codes for other hosts are rejected. Only the enabled preference is stored.
 
 Websites and the browser engine make network requests needed for normal operation. Web address lookups go to Cloudflare's family resolver over HTTPS instead of the network's DNS server. Search terms go to Google as an ordinary search request; AIR keeps no search history. Closing a page does not clear all cookies. Password saving is disabled, while Android input support, passkeys, and web sign-in cookies remain available where supported.
 
@@ -107,7 +92,6 @@ The application uses **Java 17**, **Android Views**, and **GeckoView**. GeckoVie
 | GeckoView | 158.0.20261007201254 |
 | AndroidX Browser | 1.10.0 |
 | ZXing Android Embedded | 4.3.0 |
-| Google Play services SMS API | 18.3.1 |
 
 Open this folder in Android Studio, or install JDK 17 and the Android SDK, then run:
 
@@ -153,13 +137,6 @@ After building with the script above, connect an Android device or start an emul
 ```sh
 ./gradlew :navigation:test :updates:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest
 ./gradlew :app:connectedDebugAndroidTest
-```
-
-SMS field/bridge/automatic-verification regression tests use Node.js 22 or later and jsdom as a development-only dependency:
-
-```sh
-npm ci --prefix scripts
-npm run --prefix scripts test:sms
 ```
 
 Verification uses a local HTTP server and test callback receivers without real accounts. It covers external-site blocking, navigation within a site, script redirects, popups, Custom Tabs, OAuth callbacks, and Firebase certificate, event, and encrypted-field handling. QR decoding was also checked with an image supplied to the emulator camera. See the [verification record](docs/verification.md) for results and remaining checks.

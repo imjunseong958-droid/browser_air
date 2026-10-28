@@ -20,15 +20,6 @@ jobs:
           packages: 'platform-tools platforms;android-37.2 build-tools;36.0.0'
       - name: Verify release metadata and publication
         run: python3 -m unittest discover -s scripts/tests -v
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: scripts/package-lock.json
-      - name: Verify SMS input fields and document boundaries
-        run: |
-          npm ci --prefix scripts
-          npm run --prefix scripts test:sms
       - name: Verify pull requests and development builds
         if: github.ref != 'refs/heads/main' || github.event_name == 'pull_request'
         run: |

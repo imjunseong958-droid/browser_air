@@ -9,7 +9,6 @@ AIR uses upstream libraries without modifying their source. The original license
 | ZXing Android Embedded | Apache License 2.0 | https://github.com/journeyapps/zxing-android-embedded |
 | ZXing Core | Apache License 2.0 | https://github.com/zxing/zxing |
 | Google Play Services FIDO (via GeckoView) | Publisher SDK terms | https://developers.google.com/android/guides/overview |
-| Google Play Services SMS API 18.3.1 | Publisher SDK terms | https://developers.google.com/identity/sms-retriever/user-consent/overview |
 | OpenJDK desugared libraries | GPLv2 with Classpath Exception and Apache License 2.0 notices in the artifact | https://github.com/google/desugar_jdk_libs |
 
 GeckoView binary and source artifacts:
