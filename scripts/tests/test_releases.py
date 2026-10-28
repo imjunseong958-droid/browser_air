@@ -40,7 +40,7 @@ class ReleasesTest(unittest.TestCase):
         for permission in ("RECEIVE_SMS", "READ_SMS", "SEND_SMS"):
             for declaration in ("uses-permission", "uses-permission-sdk-23"):
                 badging = BADGING + f"{declaration}: name='android.permission.{permission}'\n"
-                with self.assertRaisesRegex(ValueError, "one-message consent"):
+                with self.assertRaisesRegex(ValueError, "must not declare SMS permissions"):
                     release_manifest.from_badging(badging, self.apk)
     def test_corrupt_metadata_and_modified_apk_are_rejected(self):
         for field, value in (("versionCode", True), ("sizeBytes", self.info["sizeBytes"] + 1),

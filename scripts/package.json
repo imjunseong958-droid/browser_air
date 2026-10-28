@@ -1,6 +1,0 @@
-{
-  "name": "air-browser-verification",
-  "private": true,
-  "scripts": { "test:sms": "node --test tests/sms_fields.cjs" },
-  "devDependencies": { "jsdom": "26.1.0" }
-}
