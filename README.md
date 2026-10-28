@@ -37,7 +37,9 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 ## What it does
 
 - Opens external HTTP/HTTPS links and scans QR codes with the camera.
-- **필요한 것 검색** on the home screen opens one typed query as Google results with `safe=active` and `udm=14` (text links only). Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked.
+- **필요한 것 검색** on the home screen opens one typed query as Google results with `safe=active` and `udm=14` (text links only). Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked. The dialog's **YouTube** button opens YouTube search results instead.
+- On YouTube, search results and videos open, but the home feed, subscriptions, and Shorts do not. Moving straight from one video to another (a recommendation, autoplay, or a `youtu.be` link) is refused unless both videos are in the same chosen playlist; YouTube's generated mixes (`list=RD…`) do not count. A small built-in extension (`app/src/main/assets/youtube-calm`, CSS only) hides the recommended videos under a video, Shorts shelves in search results, and the Home/Shorts/You bar.
+- Checks every address change, not only page loads. Sites such as YouTube change their own address without loading a page; a change to a blocked route is undone by returning to the previous page.
 - Resolves up to eight initial HTTP redirects, including shortened QR links, then pins the session to the final site once the first document is displayed.
 - Keeps recognized Google Forms, Docs, Sheets, Slides, Drawings, and Drive file links within the same resource, including submission and completion pages. Other websites use the original host and its `www` alias as the fallback boundary. HTTPS-to-HTTP transitions remain blocked.
 - Resolves recognized HTTPS Google `/url` link wrappers before loading, checking the final destination and rejecting ambiguous or unsafe targets. It never opens the wrapper as an unchecked redirect.
@@ -46,7 +48,7 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 - Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load.
 - Blocks a fixed list of communities and their subdomains (for example DC Inside, FM Korea, theqoo, Ruliweb, Instiz, Clien, MLBPark, Nate Pann, Arca Live, and Reddit) on entry, links, redirects, popups, and frames. The list is `COMMUNITY_DOMAINS` in `navigation/src/main/java/dev/air/navigation/WebLinks.java`.
 - Resolves web addresses only through Cloudflare's family DNS-over-HTTPS resolver (`family.cloudflare-dns.com`), which refuses adult and malware domains. There is no fallback to the device's DNS.
-- Blocks known search and recommendation entry points by destination and route, including unfiltered Google search, Bing search, Naver/Daum search, YouTube home/feed/search/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
+- Blocks known search and recommendation entry points by destination and route, including unfiltered Google search, Bing search, Naver/Daum search, YouTube home/feed/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
 - Provides an Android Custom Tabs service so clients such as AppAuth can select AIR for authentication. It reports page-start, completion, failure, and close events to the calling app.
 - Tracks OAuth/OIDC requests using `redirect_uri`, `client_id`, and state values. External authentication started within a site must return to that site or an existing authentication transaction. Nested identity-provider flows preserve the original app callback and state.
 - Checks callback schemes, hosts, ports, paths, fixed query parameters, and the state value when supplied. Authentication exceptions are bounded to 15 minutes, eight authentication origins, and four nested transactions. Arbitrary `intent:` packages and browser fallback URLs are not executed.
@@ -117,6 +119,7 @@ Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK loca
 
 - `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
 - `app/`: native screens, QR scanning, browser sessions, Custom Tabs, and callbacks to other apps.
+- `app/src/main/assets/youtube-calm/`: the YouTube hiding rules. GeckoView keeps installed built-in extensions, so raise `version` in its `manifest.json` whenever the CSS changes.
 - `updates/`: release URL and version policy, bounded HTTPS transfers, checksum checks, and JVM regression tests.
 - `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint, policy tests, and publication tests before uploading the **AIR** artifact. A separate main-only job with repository write permission publishes GitHub Releases.
 

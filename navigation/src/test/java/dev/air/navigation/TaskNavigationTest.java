@@ -53,7 +53,7 @@ public final class TaskNavigationTest {
 
     @Test public void discoveryIsBlockedEvenOnTheCurrentHostOrAfterApproval() {
         assertEquals(BLOCK_SEARCH, loaded("https://github.com/org/project").evaluate("https://github.com/search?q=x", false, true));
-        for (String url : new String[] {"https://youtube.com/", "https://youtube.com/results?search_query=x",
+        for (String url : new String[] {"https://youtube.com/", "https://youtube.com/shorts/x",
                 "https://youtube.com/feed/subscriptions", "https://x.com/home", "https://x.com/explore",
                 "https://docs.google.com/forms/", "https://drive.google.com/drive/u/0/my-drive"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));

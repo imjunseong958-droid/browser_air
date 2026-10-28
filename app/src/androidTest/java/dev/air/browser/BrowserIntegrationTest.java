@@ -114,7 +114,7 @@ public final class BrowserIntegrationTest {
             UiObject2 field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
             assertNotNull(field);
             field.setText("night pharmacy");
-            text("검색").click();
+            text("Google").click();
             var browser = InstrumentationRegistry.getInstrumentation().waitForMonitorWithTimeout(opened, 10_000);
             assertNotNull("Search did not open the browser", browser);
             assertEquals("https://www.google.com/search?q=night+pharmacy&udm=14&safe=active", browser.getIntent().getDataString());

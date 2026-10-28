@@ -1,0 +1,12 @@
+{
+  "manifest_version": 2,
+  "name": "AIR YouTube without recommendations",
+  "version": "1.0",
+  "browser_specific_settings": { "gecko": { "id": "youtube-calm@air.local" } },
+  "content_scripts": [{
+    "matches": ["https://m.youtube.com/*", "https://www.youtube.com/*", "https://youtube.com/*"],
+    "css": ["hide.css"],
+    "run_at": "document_start",
+    "all_frames": false
+  }]
+}

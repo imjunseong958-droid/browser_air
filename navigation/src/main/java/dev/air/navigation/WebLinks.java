@@ -11,6 +11,7 @@ final class WebLinks {
     private static final Set<String> GOOGLE_LINK_HOSTS = Set.of(
             "google.com", "www.google.com", "google.co.kr", "www.google.co.kr");
     private static final String SAFE_SEARCH = "https://www.google.com/search";
+    private static final Set<String> YOUTUBE_HOSTS = Set.of("youtube.com", "www.youtube.com", "m.youtube.com");
     /** Communities AIR never opens, including their subdomains. */
     private static final Set<String> COMMUNITY_DOMAINS = Set.of(
             "dcinside.com", "dcinside.co.kr", "fmkorea.com", "theqoo.net", "ruliweb.com", "instiz.net",
@@ -41,6 +42,30 @@ final class WebLinks {
     static String searchUrl(String terms) {
         if (terms == null || terms.isBlank()) return null;
         return SAFE_SEARCH + "?q=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8) + "&udm=14&safe=active";
+    }
+
+    static String youtubeSearchUrl(String terms) {
+        if (terms == null || terms.isBlank()) return null;
+        return "https://m.youtube.com/results?search_query=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8);
+    }
+
+    /** Going straight from one video to another follows a recommendation, unless both share a chosen playlist. */
+    static boolean isRecommendationHop(WebAddress from, WebAddress to) {
+        String current = youtubeVideo(from);
+        String next = youtubeVideo(to);
+        if (current == null || next == null || current.equals(next)) return false;
+        String list = from.parameters().get("list");
+        // RD playlists are YouTube's generated mixes rather than a list someone chose.
+        return list == null || list.startsWith("RD") || !list.equals(to.parameters().get("list"));
+    }
+
+    private static String youtubeVideo(WebAddress address) {
+        if (address == null) return null;
+        String path = address.normalizedPath();
+        if (address.host().equals("youtu.be")) return path.length() > 1 ? path.substring(1) : null;
+        if (!YOUTUBE_HOSTS.contains(address.host()) || !path.equals("/watch")) return null;
+        String video = address.parameters().get("v");
+        return video == null || video.isBlank() ? null : video;
     }
 
     /** Google search opens only as SafeSearch text results; image, video and other tabs collapse into it. */
@@ -88,7 +113,8 @@ final class WebLinks {
                 "search.yahoo.com", "search.naver.com", "m.search.naver.com", "search.daum.net",
                 "search.brave.com", "ecosia.org", "yandex.com", "yandex.ru", "baidu.com").contains(host)) return true;
         if (Set.of("youtube.com", "m.youtube.com").contains(host)) {
-            return path.equals("/") || at(path, "/feed") || at(path, "/results") || at(path, "/shorts");
+            // Search results stay open; the home feed, subscriptions and Shorts do not.
+            return path.equals("/") || at(path, "/feed") || at(path, "/shorts");
         }
         if (Set.of("x.com", "twitter.com", "mobile.twitter.com").contains(host)) {
             return path.equals("/") || at(path, "/home") || at(path, "/explore") || at(path, "/search");

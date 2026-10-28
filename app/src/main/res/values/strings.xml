@@ -8,14 +8,15 @@
     <string name="scan_qr">QR 코드 스캔</string>
     <string name="search_open">필요한 것 검색</string>
     <string name="search_title">필요한 것만 찾아보기</string>
-    <string name="search_body">텍스트 결과만 보여줘요. 커뮤니티와 성인 사이트는 열리지 않아요.</string>
+    <string name="search_body">Google은 텍스트 결과만, YouTube는 추천 영상과 Shorts 없이 보여줘요. 커뮤니티와 성인 사이트는 열리지 않아요.</string>
     <string name="search_hint">검색어</string>
-    <string name="search_action">검색</string>
+    <string name="search_action">Google</string>
+    <string name="search_youtube">YouTube</string>
     <string name="home_hint">다른 앱에서 누른 링크도 여기서 열립니다.</string>
     <string name="home_hint_not_default">기본 브라우저로 설정하면 앱 링크도 열려요.</string>
     <string name="home_footer">머무르기보다, 돌아가기 위해.</string>
     <string name="setup_title">연결은 그대로.\n탐색은 가볍게.</string>
-    <string name="setup_body">AIR를 기본 브라우저로 설정하면 설문, 문서, 로그인, QR 링크를 열 수 있어요.\n\n주소창·추천·탭은 없어요. 검색은 홈 화면에서 텍스트 결과로만 할 수 있어요.\n\n커뮤니티, 성인 사이트, 추천 목록으로의 이동은 멈춥니다.</string>
+    <string name="setup_body">AIR를 기본 브라우저로 설정하면 설문, 문서, 로그인, QR 링크를 열 수 있어요.\n\n주소창·추천·탭은 없어요. 검색은 홈 화면에서 Google 텍스트 결과나 추천 영상 없는 YouTube로 할 수 있어요.\n\n커뮤니티, 성인 사이트, 추천 목록으로의 이동은 멈춥니다.</string>
     <string name="set_default">기본 브라우저로 설정</string>
     <string name="later">나중에</string>
     <string name="default_unavailable">설정 → 앱 → 기본 앱 → 브라우저 앱에서 AIR를 선택하세요.</string>
@@ -34,6 +35,7 @@
     <string name="search_blocked">새로운 탐색은 여기서 멈춰요</string>
     <string name="search_blocked_body">추천 목록과 다른 검색 엔진은 열지 않아요. 필요한 건 홈 화면의 검색으로 찾아보세요.</string>
     <string name="community_blocked">이 사이트는 AIR에서 열지 않아요</string>
+    <string name="recommendation_blocked">추천 영상으로는 넘어가지 않아요. 보고 싶은 영상은 검색해서 열어주세요.</string>
     <string name="community_blocked_body">커뮤니티는 AIR에서 열 수 없어요. 필요한 정보는 홈 화면의 검색으로 찾아보세요.</string>
     <string name="navigation_blocked">지금 작업과 연결되지 않은 이동이에요</string>
     <string name="navigation_blocked_body">열린 작업에 필요한 연결인지 확인할 수 없어요. 원래 링크에서 다시 시작해 주세요.</string>

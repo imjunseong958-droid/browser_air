@@ -10,7 +10,12 @@ The home screen's search opens Google results with `safe=active&udm=14`; other G
 - **48 Android 15 / API 35 emulator integration tests** passed (41 browser, seven updater), including a community entry, a non-Google search entry, and the home search opening the SafeSearch text URL. Local fixtures still load with DNS-over-HTTPS-only mode.
 - With network access on the emulator, a home search loaded Google's text results through the family resolver, tapping the image tab reloaded text results, and an adult domain showed AIR's connection error. The resolver answered `0.0.0.0` for that domain and mapped `www.google.com` to `forcesafesearch.google.com`.
 
-Physical devices, networks that block DNS-over-HTTPS, and communities outside the list were not tested.
+Before the YouTube rules below, a single video link reached YouTube's home feed and Shorts: YouTube changes its address in place, which never produced a load request. AIR now checks every address change and returns to the previous page when the new address is blocked. YouTube search opens from the home dialog; the home feed, subscriptions, and Shorts stay blocked; moving straight from one video to another is refused unless both are in the same chosen playlist; and a CSS-only built-in extension hides recommended videos, Shorts in results, and the Home/Shorts/You bar.
+
+- **56 navigation/Firebase tests** (eleven search, community, and YouTube cases) and the release, update, and Lint checks above passed again. **48 emulator integration tests** passed.
+- On the emulator, a YouTube video showed no recommended videos below the comments. Tapping the YouTube logo showed AIR's search toast and returned to the video. YouTube search from AIR showed regular results without Shorts or the bottom bar, and a result opened its video. Google results kept `safe=active&udm=14` when Google added its own parameter in place.
+
+Physical devices, networks that block DNS-over-HTTPS, communities outside the list, YouTube autoplay into another video, and YouTube's desktop layout were not tested.
 
 ## Coupang mobile split code widget — 20 October 2026
 

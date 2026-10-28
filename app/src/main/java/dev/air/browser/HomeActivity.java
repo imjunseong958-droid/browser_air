@@ -47,7 +47,7 @@ public final class HomeActivity extends AppCompatActivity {
         updates.resume();
     }
 
-    /** One typed query opens Google's SafeSearch text results; there is no suggestion list or history. */
+    /** One typed query opens Google's SafeSearch text results or YouTube results; there is no suggestion list or history. */
     private void showSearch() {
         EditText terms = new EditText(this);
         terms.setHint(R.string.search_hint);
@@ -63,21 +63,26 @@ public final class HomeActivity extends AppCompatActivity {
                 .setTitle(R.string.search_title)
                 .setMessage(R.string.search_body)
                 .setView(frame)
-                .setPositiveButton(R.string.search_action, (shown, which) -> openSearch(terms.getText().toString()))
+                .setPositiveButton(R.string.search_action,
+                        (shown, which) -> openSearch(NavigationPolicy.searchUrl(terms.getText().toString())))
+                .setNeutralButton(R.string.search_youtube,
+                        (shown, which) -> openSearch(NavigationPolicy.youtubeSearchUrl(terms.getText().toString())))
                 .setNegativeButton(R.string.cancel, null)
                 .create();
         terms.setOnEditorActionListener((view, action, event) -> {
             if (action != EditorInfo.IME_ACTION_SEARCH) return false;
-            if (openSearch(terms.getText().toString())) dialog.dismiss();
+            if (openSearch(NavigationPolicy.searchUrl(terms.getText().toString()))) dialog.dismiss();
             return true;
         });
         if (dialog.getWindow() != null) dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
         dialog.show();
+        for (int button : new int[] {AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEUTRAL, AlertDialog.BUTTON_NEGATIVE}) {
+            dialog.getButton(button).setAllCaps(false);
+        }
         terms.requestFocus();
     }
 
-    private boolean openSearch(String terms) {
-        String url = NavigationPolicy.searchUrl(terms);
+    private boolean openSearch(String url) {
         if (url == null) return false;
         startActivity(new Intent(this, BrowserActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url)));
         return true;

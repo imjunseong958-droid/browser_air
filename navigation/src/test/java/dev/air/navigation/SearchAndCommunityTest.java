@@ -55,13 +55,58 @@ public final class SearchAndCommunityTest {
                 "https://www.google.com:8443/search?q=a", "https://www.google.com/", "https://www.google.com/imghp",
                 "https://www.google.com/search/about?q=a", "https://www.google.de/search?q=a",
                 "https://www.bing.com/search?q=a", "https://search.naver.com/search.naver?query=a",
-                "https://duckduckgo.com/?q=a", "https://youtube.com/results?search_query=a"}) {
+                "https://duckduckgo.com/?q=a"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
             assertEquals(url, BLOCK_SEARCH, loaded("https://example.com/").evaluate(url, false, true));
         }
         // Frames are not rewritten, so only results that are already safe may be embedded.
         assertEquals(BLOCK_SEARCH, loaded("https://example.com/").evaluateFrame("https://www.google.com/search?q=a&udm=2"));
         assertEquals(ALLOW, loaded("https://example.com/").evaluateFrame(SAFE));
+    }
+
+    @Test public void youtubeSearchOpensButItsFeedsAndShortsDoNot() {
+        String results = "https://m.youtube.com/results?search_query=night+pharmacy";
+        assertEquals(results, NavigationPolicy.youtubeSearchUrl(" night pharmacy "));
+        assertNull(NavigationPolicy.youtubeSearchUrl(" "));
+        assertEquals(ALLOW, NavigationPolicy.entryDecision(results));
+        assertEquals(ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", results));
+        for (String url : new String[] {"https://m.youtube.com/", "https://www.youtube.com/feed/subscriptions",
+                "https://m.youtube.com/shorts/x"}) {
+            assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
+            assertEquals(url, BLOCK_SEARCH, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", url));
+        }
+    }
+
+    @Test public void videosOpenFromSearchButNotFromAnotherVideo() {
+        String watching = "https://m.youtube.com/watch?v=a";
+        assertEquals(ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/results?search_query=x", watching));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(SAFE, "https://www.youtube.com/watch?v=a"));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(null, watching));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(watching, watching + "&t=30s"));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(watching, "https://m.youtube.com/@channel"));
+        for (String next : new String[] {"https://m.youtube.com/watch?v=b", "https://www.youtube.com/watch?v=b&pp=x",
+                "https://youtu.be/b"}) {
+            assertEquals(next, BLOCK_RECOMMENDATION, NavigationPolicy.pageChange(watching, next));
+        }
+        assertEquals(BLOCK_RECOMMENDATION, NavigationPolicy.pageChange("https://youtu.be/a", "https://m.youtube.com/watch?v=b"));
+    }
+
+    @Test public void aChosenPlaylistPlaysOnButGeneratedMixesDoNot() {
+        assertEquals(ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a&list=PL1",
+                "https://m.youtube.com/watch?v=b&list=PL1&index=2"));
+        assertEquals(BLOCK_RECOMMENDATION, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a&list=PL1",
+                "https://m.youtube.com/watch?v=b&list=PL2"));
+        assertEquals(BLOCK_RECOMMENDATION, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a",
+                "https://m.youtube.com/watch?v=b&list=PL1"));
+        assertEquals(BLOCK_RECOMMENDATION, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a&list=RDa",
+                "https://m.youtube.com/watch?v=b&list=RDa"));
+    }
+
+    @Test public void inPageAddressChangesAreCheckedWithoutRewriting() {
+        assertEquals(BLOCK_SEARCH, NavigationPolicy.pageChange(SAFE, "https://www.google.com/search?q=night+pharmacy&udm=2"));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(SAFE, SAFE + "&start=10"));
+        assertEquals(BLOCK_COMMUNITY, NavigationPolicy.pageChange(SAFE, "https://www.reddit.com/"));
+        assertEquals(ALLOW, NavigationPolicy.pageChange(SAFE, "about:blank"));
     }
 
     @Test public void communitiesNeverOpenByAnyRoute() {

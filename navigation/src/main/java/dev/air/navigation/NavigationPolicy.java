@@ -14,7 +14,9 @@ import java.util.function.LongSupplier;
  * any other web destination becomes the current task.
  */
 public final class NavigationPolicy {
-    public enum Decision { ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_COMMUNITY, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED }
+    public enum Decision {
+        ALLOW, AUTH_CALLBACK, BLOCK_SEARCH, BLOCK_COMMUNITY, BLOCK_RECOMMENDATION, BLOCK_SITE, BLOCK_INVALID, BLOCK_EXPIRED
+    }
 
     private static final long AUTH_TIMEOUT_MS = 15 * 60 * 1000L;
     private static final int MAX_INITIAL_REDIRECTS = 8;
@@ -63,6 +65,21 @@ public final class NavigationPolicy {
 
     /** The SafeSearch text results for typed terms, or null when there is nothing to search. */
     public static String searchUrl(String terms) { return WebLinks.searchUrl(terms); }
+
+    /** YouTube's search results for typed terms, or null when there is nothing to search. */
+    public static String youtubeSearchUrl(String terms) { return WebLinks.youtubeSearchUrl(terms); }
+
+    /**
+     * Checks a move from the page showing now. Pages such as YouTube change their own address without a load
+     * request, so this also runs on every address change; it never rewrites the target.
+     */
+    public static Decision pageChange(String from, String to) {
+        WebAddress target = WebAddress.parse(to);
+        if (target == null) return Decision.ALLOW;
+        if (isCommunity(target)) return Decision.BLOCK_COMMUNITY;
+        if (isSearch(target)) return Decision.BLOCK_SEARCH;
+        return WebLinks.isRecommendationHop(WebAddress.parse(from), target) ? Decision.BLOCK_RECOMMENDATION : Decision.ALLOW;
+    }
 
     public static Decision entryDecision(String url) {
         WebAddress address = WebAddress.parse(resolveLink(url));
