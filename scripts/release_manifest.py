@@ -38,7 +38,7 @@ def validate(info, apk):
 
 def from_badging(badging, apk):
     if re.search(r"^uses-permission(?:-sdk-\d+)?: name='android\.permission\.(?:RECEIVE_SMS|READ_SMS|SEND_SMS)'", badging, re.M):
-        raise ValueError("AIR APK must use one-message consent without SMS permissions")
+        raise ValueError("AIR APK must not declare SMS permissions")
     package = re.search(r"^package: name='([^']+)' versionCode='(\d+)' versionName='([^']+)'", badging, re.M)
     sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
     native = re.search(r"^native-code:(.*)$", badging, re.M)
