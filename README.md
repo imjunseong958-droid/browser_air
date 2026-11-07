@@ -1,6 +1,6 @@
 # AIR — Only the connections you need
 
-AIR is an Android app for forms, documents, web sign-ins, and links opened from other apps, including QR codes scanned with the phone's camera app. It keeps practical web features available while limiting habitual browsing: search shows Google SafeSearch text results only, recommendation feeds and communities are blocked, and adult domains do not resolve. Links, redirects, and pages opened from them otherwise work normally.
+AIR is an Android browser that blocks harmful sites and holds back YouTube's recommendations: search shows Google SafeSearch text results only, adult sites and communities do not open, and YouTube's home feed, Shorts, and video-to-video recommendations are refused. Every other page opens normally, whatever led to it.
 
 AIR has no address bar, search suggestions, tab list, bookmarks, or browsing-history screen. It adds no subscription, ads, account, usage rewards, or recommendation feed.
 
@@ -14,7 +14,7 @@ Distributed APKs use a fixed release signing key and keep the application ID `de
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. **Search** is the home action; a small **Check for updates** button sits at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The home screen shows a Bible verse in Korean and English, with **Search** below it and a small **Check for updates** button at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 
@@ -37,28 +37,27 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 ## What it does
 
 - Opens external HTTP/HTTPS links, including QR codes scanned with the phone's camera app when AIR is the default browser. AIR has no built-in QR scanner.
-- **검색** on the home screen opens a spotlight-style search over the home screen. A typed query opens as Google results with `safe=active` and `udm=14` (text links only), the keyboard's search key or the Google row; the YouTube row opens YouTube search results instead. Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked.
+- Shows a different Bible verse each time AIR is opened, in Korean (개역한글) and English (World English Bible, American edition). Each install walks through its own shuffled order of the 149 verses in `app/src/main/assets/verses.tsv`, so none comes back until all have been shown. Turning the screen or closing a page opened from home keeps the verse. Links from other apps go straight to the page.
+- **검색** on the home screen opens a spotlight-style search over the home screen. A typed query opens as Google results with `safe=active` and `udm=14` (text links only), from the keyboard's search key or the Google row. Any Google search link, including image, video, and AI tabs, is rewritten to that view before loading; other search engines stay blocked.
 - On YouTube, search results and videos open, but the home feed, subscriptions, and Shorts do not. Moving straight from one video to another (a recommendation, autoplay, or a `youtu.be` link) is refused unless both videos are in the same chosen playlist; YouTube's generated mixes (`list=RD…`) do not count. A small built-in extension (`app/src/main/assets/youtube-calm`, CSS only) hides the recommended videos under a video, Shorts shelves in search results, and the Home/Shorts/You bar.
 - Checks every address change, not only page loads. Sites such as YouTube change their own address without loading a page; a change to a blocked route is undone by returning to the previous page.
-- Resolves up to eight initial HTTP redirects, including shortened QR links, then pins the session to the final site once the first document is displayed.
-- Keeps recognized Google Forms, Docs, Sheets, Slides, Drawings, and Drive file links within the same resource, including submission and completion pages. Other websites use the original host and its `www` alias as the fallback boundary. HTTPS-to-HTTP transitions remain blocked.
 - Resolves recognized HTTPS Google `/url` link wrappers before loading, checking the final destination and rejecting ambiguous or unsafe targets. It never opens the wrapper as an unchecked redirect.
-- Allows Google account selection and sign-in with `continue` only when returning to the opened task. A login page displayed before the form does not replace the task boundary. This exception expires after 15 minutes and ends on return.
-- Opens other sites and documents reached by links, redirects, scripts, popups, or frames without a prompt; the task follows the page you move to. Only search, recommendation, and community destinations are refused.
-- Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load.
+- Opens every page not listed below, whether reached by a link, redirect, script, popup, or frame. There is no task or site boundary. Addresses browsers accept but `java.net.URI` does not, such as `?ids=1|2`, `/100%/off`, or a host with an underscore, are read the way a browser reads them.
+- Applies the navigation policy to links, script-driven redirects, popups, and iframe documents. External images, scripts, and stylesheets can still load. Content a page makes itself (`about:blank`, `srcdoc`, `blob:`, `data:`) runs in the engine.
+- Hands phone, mail, and other apps' links (`tel:`, `mailto:`, `kakaotalk:`, payment apps) to Android. A page that did not follow a tap has to ask first. From an `intent:` link only the address is used, never its package, extras, or fallback URL, and an `https` address loads inside AIR. Local schemes such as `file:` and `content:` are refused.
+- Returns to the page behind when a link fails to load: **Back** closes the error, and **Retry** loads the failed link again.
 - Blocks a fixed list of communities and their subdomains (for example DC Inside, FM Korea, theqoo, Ruliweb, Instiz, Clien, MLBPark, Nate Pann, Arca Live, and Reddit) on entry, links, redirects, popups, and frames. The list is `COMMUNITY_DOMAINS` in `navigation/src/main/java/dev/air/navigation/WebLinks.java`.
 - Resolves web addresses only through Cloudflare's family DNS-over-HTTPS resolver (`family.cloudflare-dns.com`), which refuses adult and malware domains. There is no fallback to the device's DNS.
 - Blocks adult sites on every route, including ones the family resolver lets through: a fixed list (`ADULT_DOMAINS` in `WebLinks.java`, for example nimi.wiki, the X video ranking known as 트위터닷넷 or 니미위키, and twitter.net, which is not X), any host containing a known adult site name such as `porn`, `xvideo`, or `yadong`, and the `.xxx`, `.porn`, `.sex`, and `.adult` domains. Only the host is checked, not the path.
-- Blocks known search and recommendation entry points by destination and route, including unfiltered Google search, Bing search, Naver/Daum search, YouTube home/feed/Shorts, X home/explore/search, GitHub search/explore, and Google document lists. Utility pages on the same providers are not automatically labelled as search. The block also applies to external entries, wrappers, redirects, and frames. CAPTCHA frames receive limited exceptions.
+- Blocks search that SafeSearch does not cover and the recommendation feeds, by destination and route: Google image, video, shopping, and Discover pages, Bing, DuckDuckGo and other engines, Naver/Daum search, YouTube home/feed/Shorts, and X home/explore/search, where adult videos circulate. Google's home page and the Naver and Daum home pages stay open. The block also applies to external entries, wrappers, redirects, and frames.
 - Provides an Android Custom Tabs service so clients such as AppAuth can select AIR for authentication. It reports page-start, completion, failure, and close events to the calling app.
-- Tracks OAuth/OIDC requests using `redirect_uri`, `client_id`, and state values. External authentication started within a site must return to that site or an existing authentication transaction. Nested identity-provider flows preserve the original app callback and state.
-- Checks callback schemes, hosts, ports, paths, fixed query parameters, and the state value when supplied. Authentication exceptions are bounded to 15 minutes, eight authentication origins, and four nested transactions. Arbitrary `intent:` packages and browser fallback URLs are not executed.
+- Sends an OAuth/OIDC result back to the app that opened AIR for it. The request is recognized from its `redirect_uri`, `client_id`, and state in the first page's redirect chain, and the result must match the callback's scheme, host, port, path, fixed query parameters, and state. A sign-in a page starts itself is an ordinary move between pages.
 - Handles Firebase Android SDK callbacks for OAuth and phone-auth verification. It checks the requested app package, installed signing-certificate fingerprint, SDK callback activity, and `eventId`, then forwards only the required callback fields. The installed signature is checked again on return. AIR does not bundle the Firebase SDK or Firebase analytics.
 - Identifies Custom Tabs callers through their Binder UID. HTTPS callbacks are delivered to the verified calling app or completed inside AIR. There is no button to hand a blocked page to another browser.
-- Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions.
-- Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream and are limited to 100 MB.
-- Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Notification, autoplay, and tracking-exception requests are denied.
-- Displays the current site in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
+- Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions; a further new-window link opens in the page showing now.
+- Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream, including files a page makes itself, keep the name the server or page chose, and are limited to 100 MB.
+- Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Storage access for embedded sign-ins is allowed. Notification, autoplay, and tracking-exception requests are denied.
+- Displays the current site and a lock in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
 
 ## Compatibility and limits
 
@@ -68,7 +67,7 @@ AIR does not read SMS messages or fill verification codes. Type the code on the 
 
 SafeSearch, the family resolver, and the adult-site rules reduce, but cannot eliminate, adult content: they do not filter images or posts inside otherwise allowed sites, and an adult site or community that is not on a list and does not carry a known name opens like any other site. A name rule can also refuse an unrelated site whose host happens to contain one of those names. If the resolver is unreachable (for example on a network that blocks DNS-over-HTTPS), pages fail to load instead of falling back to unfiltered DNS.
 
-AIR does not inspect and remove a site's own search, recommendations, or feeds from its DOM. Known route and document rules cannot identify every task, search, feed, or proxy site; unrecognized services retain the host boundary. Opening a new link from another app can start a new session. The navigation limits apply within AIR; other apps on the device remain usable.
+Apart from YouTube's hiding rules, AIR does not inspect and remove a site's own search, recommendations, or feeds from its page. Known route rules cannot identify every search, feed, or proxy site. Opening a new link from another app can start a new session. The navigation limits apply within AIR; other apps on the device remain usable, and a link a page hands to another app, such as another browser, leaves these limits.
 
 HTTP links are supported for uses such as restaurant menus, with an unencrypted-connection notice in the site information. Invalid TLS certificates cannot be bypassed.
 
@@ -101,8 +100,9 @@ bash scripts/build.sh
 
 Set `ANDROID_HOME` or the `sdk.dir` entry in `local.properties` to your SDK location. The script can use local runtimes under `.tools/` when available. Its default debug build generates a local debug signing key and writes `artifacts/debug/AIR.apk`; use that APK only for development. It is not interchangeable with the release APK. Keep the browser engine updated for security, and rerun authentication, navigation-policy, and device checks when changing engine versions.
 
-- `navigation/`: URL parsing, authentication and site-navigation policies, and unit tests independent of Android.
+- `navigation/`: URL parsing, the navigation policy, sign-in recognition, and unit tests independent of Android.
 - `app/`: native screens, browser sessions, Custom Tabs, and callbacks to other apps.
+- `app/src/main/assets/verses.tsv`: the home verses, one per line: Korean reference, English reference, Korean text, English text.
 - `app/src/main/assets/youtube-calm/`: the YouTube hiding rules. GeckoView keeps installed built-in extensions, so raise `version` in its `manifest.json` whenever the CSS changes.
 - `updates/`: release URL and version policy, bounded HTTPS transfers, checksum checks, and JVM regression tests.
 - `.github/workflows/android.yml`: checks pull requests and builds signed ARM64 releases on main, running Android Lint, policy tests, and publication tests before uploading the **AIR** artifact. A separate main-only job with repository write permission publishes GitHub Releases.
@@ -139,7 +139,7 @@ After building with the script above, connect an Android device or start an emul
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
-Verification uses a local HTTP server and test callback receivers without real accounts. It covers external-site blocking, navigation within a site, script redirects, popups, Custom Tabs, OAuth callbacks, and Firebase certificate, event, and encrypted-field handling. QR decoding was also checked with an image supplied to the emulator camera. See the [verification record](docs/verification.md) for results and remaining checks.
+Verification uses a local HTTP server and test callback receivers without real accounts. It covers blocked entries, links to other sites, unusual addresses, script redirects, popups, other apps' links, frames, downloads, load failures, the home verse, Custom Tabs, OAuth callbacks, and Firebase certificate, event, and encrypted-field handling. See the [verification record](docs/verification.md) for results and remaining checks.
 
 ## Third-party components
 

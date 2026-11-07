@@ -12,6 +12,8 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.mozilla.geckoview.WebResponse;
 
 /** Saves the engine's existing response stream, preserving authenticated downloads. */
@@ -60,7 +62,9 @@ final class BrowserDownloads {
     }
 
     void offer(WebResponse response) {
-        if (response.body == null || response.statusCode < 200 || response.statusCode >= 300) {
+        // A file made by the page itself (blob: or data:) has no HTTP status, which reads as 0.
+        boolean failed = response.statusCode != 0 && (response.statusCode < 200 || response.statusCode >= 300);
+        if (response.body == null || failed) {
             close(response.body);
             Toast.makeText(activity, R.string.download_failed, Toast.LENGTH_LONG).show();
             return;
@@ -85,8 +89,18 @@ final class BrowserDownloads {
         confirmation.show();
     }
 
+    /** The name the server or page chose, as in {@code attachment; filename="note.txt"}, or null without one. */
+    private static String chosenName(String disposition) {
+        if (disposition == null) return null;
+        Matcher encoded = Pattern.compile("(?i)filename\\*=(?:UTF-8'[^']*')?\"?([^\";]+)").matcher(disposition);
+        if (encoded.find()) return Uri.decode(encoded.group(1));
+        Matcher plain = Pattern.compile("(?i)filename=\"?([^\";]+)").matcher(disposition);
+        return plain.find() ? plain.group(1) : null;
+    }
+
     private static String filename(WebResponse response) {
-        String last = Uri.parse(response.uri).getLastPathSegment();
+        String last = chosenName(response.headers.get("content-disposition"));
+        if (last == null) last = Uri.parse(response.uri).getLastPathSegment();
         if (last == null || last.isBlank()) last = "document";
         String safe = last.replaceAll("[^\\p{L}\\p{N}._ -]", "_");
         if (safe.length() > 100) safe = safe.substring(0, 100);

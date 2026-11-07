@@ -10,7 +10,7 @@ public final class SearchAndCommunityTest {
     private static final String SAFE = "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active";
     private NavigationPolicy loaded(String url) {
         var policy = new NavigationPolicy(url);
-        policy.pageLoaded(url);
+        policy.pageLoaded();
         return policy;
     }
     private String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
@@ -23,7 +23,6 @@ public final class SearchAndCommunityTest {
         assertNull(NavigationPolicy.searchUrl(null));
         assertEquals(SAFE, NavigationPolicy.resolveLink(SAFE));
         assertEquals(ALLOW, NavigationPolicy.entryDecision(SAFE));
-        assertEquals("www.google.com", new NavigationPolicy(SAFE).lockedHost());
     }
 
     @Test public void everyGoogleSearchCollapsesIntoSafeTextResults() {
@@ -33,7 +32,7 @@ public final class SearchAndCommunityTest {
                 "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&tbm=vid", wrapper("https://www.google.com/search?q=night+pharmacy")}) {
             assertEquals(url, SAFE, NavigationPolicy.resolveLink(url));
             assertEquals(url, ALLOW, NavigationPolicy.entryDecision(url));
-            assertEquals(url, ALLOW, loaded("https://example.com/").evaluate(url, false, true));
+            assertEquals(url, ALLOW, loaded("https://example.com/").evaluate(url));
         }
         assertEquals(SAFE + "&start=10", NavigationPolicy.resolveLink("https://www.google.com/search?q=night+pharmacy&start=10&sca_esv=x"));
         assertEquals(SAFE, NavigationPolicy.resolveLink("https://www.google.com/search?q=night+pharmacy&start=-1"));
@@ -44,37 +43,44 @@ public final class SearchAndCommunityTest {
         assertEquals(paged, NavigationPolicy.resolveLink(paged));
         assertEquals(ALLOW, NavigationPolicy.entryDecision(paged));
         var policy = loaded(SAFE);
-        assertEquals(ALLOW, policy.evaluate("https://pharmacy.example/hours", false, true));
-        assertEquals("pharmacy.example", policy.lockedHost());
-        assertEquals(ALLOW, policy.evaluate(paged, false, true));
+        assertEquals(ALLOW, policy.evaluate("https://pharmacy.example/hours"));
+        assertEquals(ALLOW, policy.evaluate(paged));
     }
 
     @Test public void unsafeAmbiguousAndOtherSearchStaysBlocked() {
         for (String url : new String[] {"https://www.google.com/search", "https://www.google.com/search?q=",
                 "https://www.google.com/search?q=a&q=b", "http://www.google.com/search?q=a",
-                "https://www.google.com:8443/search?q=a", "https://www.google.com/", "https://www.google.com/imghp",
+                "https://www.google.com:8443/search?q=a", "https://www.google.com/imghp",
                 "https://www.google.com/search/about?q=a", "https://www.google.de/search?q=a",
                 "https://www.bing.com/search?q=a", "https://search.naver.com/search.naver?query=a",
-                "https://duckduckgo.com/?q=a"}) {
+                "https://www.naver.com/search?query=a", "https://duckduckgo.com/?q=a"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
-            assertEquals(url, BLOCK_SEARCH, loaded("https://example.com/").evaluate(url, false, true));
+            assertEquals(url, BLOCK_SEARCH, loaded("https://example.com/").evaluate(url));
         }
         // Frames are not rewritten, so only results that are already safe may be embedded.
-        assertEquals(BLOCK_SEARCH, loaded("https://example.com/").evaluateFrame("https://www.google.com/search?q=a&udm=2"));
-        assertEquals(ALLOW, loaded("https://example.com/").evaluateFrame(SAFE));
+        assertEquals(BLOCK_SEARCH, NavigationPolicy.evaluateFrame("https://www.google.com/search?q=a&udm=2"));
+        assertEquals(ALLOW, NavigationPolicy.evaluateFrame(SAFE));
     }
 
-    @Test public void youtubeSearchOpensButItsFeedsAndShortsDoNot() {
+    @Test public void youtubeSearchResultsOpenButItsFeedsAndShortsDoNot() {
         String results = "https://m.youtube.com/results?search_query=night+pharmacy";
-        assertEquals(results, NavigationPolicy.youtubeSearchUrl(" night pharmacy "));
-        assertNull(NavigationPolicy.youtubeSearchUrl(" "));
         assertEquals(ALLOW, NavigationPolicy.entryDecision(results));
         assertEquals(ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", results));
-        for (String url : new String[] {"https://m.youtube.com/", "https://www.youtube.com/feed/subscriptions",
+        assertEquals(ALLOW, NavigationPolicy.entryDecision("https://youtube.com/watch?v=example"));
+        for (String url : new String[] {"https://m.youtube.com/", "https://youtube.com/", "https://www.youtube.com/feed/subscriptions",
                 "https://m.youtube.com/shorts/x"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", url));
+            assertEquals(url, BLOCK_SEARCH, loaded(SAFE).evaluate(url));
         }
+    }
+
+    @Test public void xFeedsStayBlockedButItsPostsOpen() {
+        for (String url : new String[] {"https://x.com/", "https://x.com/home", "https://x.com/explore", "https://twitter.com/search?q=a"}) {
+            assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
+            assertEquals(url, BLOCK_SEARCH, loaded(SAFE).evaluate(url));
+        }
+        assertEquals(ALLOW, NavigationPolicy.entryDecision("https://x.com/AirApp/status/1"));
     }
 
     @Test public void videosOpenFromSearchButNotFromAnotherVideo() {
@@ -114,14 +120,11 @@ public final class SearchAndCommunityTest {
                 "https://m.fmkorea.com/best", "https://theqoo.net/hot", "https://www.reddit.com/r/all", "https://old.reddit.com/",
                 "https://mlbpark.donga.com/mp/b.php", "https://pann.nate.com/talk/1", "http://ruliweb.com/", "https://ARCA.LIVE./b/x"}) {
             assertEquals(url, BLOCK_COMMUNITY, NavigationPolicy.entryDecision(url));
-            var policy = loaded("https://example.com/");
-            assertEquals(url, BLOCK_COMMUNITY, policy.evaluate(url, false, true));
-            assertEquals(url, BLOCK_COMMUNITY, policy.evaluate(url, true, false));
-            assertEquals(url, BLOCK_COMMUNITY, policy.evaluateFrame(url));
-            assertEquals(url, "example.com", policy.lockedHost());
+            assertEquals(url, BLOCK_COMMUNITY, loaded("https://example.com/").evaluate(url));
+            assertEquals(url, BLOCK_COMMUNITY, NavigationPolicy.evaluateFrame(url));
         }
         assertEquals(BLOCK_COMMUNITY, NavigationPolicy.entryDecision(wrapper("https://gall.dcinside.com/")));
-        assertEquals(BLOCK_COMMUNITY, loaded(SAFE).evaluate(wrapper("https://www.fmkorea.com/"), false, true));
+        assertEquals(BLOCK_COMMUNITY, loaded(SAFE).evaluate(wrapper("https://www.fmkorea.com/")));
         assertThrows(IllegalArgumentException.class, () -> new NavigationPolicy("https://reddit.com/"));
     }
 
@@ -138,20 +141,16 @@ public final class SearchAndCommunityTest {
                 "https://www.pornhub.com/", "https://xvideos2.com/", "https://ko.xhamster18.desi/", "https://hentai-site.example/",
                 "https://yadong24.net/", "https://anything.xxx/", "https://shop.adult/", "https://pages.sex/"}) {
             assertEquals(url, BLOCK_ADULT, NavigationPolicy.entryDecision(url));
-            var policy = loaded("https://example.com/");
-            assertEquals(url, BLOCK_ADULT, policy.evaluate(url, false, true));
-            assertEquals(url, BLOCK_ADULT, policy.evaluate(url, true, false));
-            assertEquals(url, BLOCK_ADULT, policy.evaluateFrame(url));
+            assertEquals(url, BLOCK_ADULT, loaded("https://example.com/").evaluate(url));
+            assertEquals(url, BLOCK_ADULT, NavigationPolicy.evaluateFrame(url));
             assertEquals(url, BLOCK_ADULT, NavigationPolicy.pageChange("https://example.com/", url));
-            assertEquals(url, "example.com", policy.lockedHost());
         }
         assertEquals(BLOCK_ADULT, NavigationPolicy.entryDecision(wrapper("https://nimi.wiki/ko")));
-        assertEquals(BLOCK_ADULT, loaded(SAFE).evaluate(wrapper("https://twitter.net/"), false, true));
+        assertEquals(BLOCK_ADULT, loaded(SAFE).evaluate(wrapper("https://twitter.net/")));
         assertThrows(IllegalArgumentException.class, () -> new NavigationPolicy("https://twitter.net/"));
         var signIn = new NavigationPolicy("https://accounts.google.com/AccountChooser?continue="
                 + encode("https://twitter.net/") + "&service=wise");
-        assertFalse(signIn.isAuthenticating());
-        assertEquals(BLOCK_ADULT, signIn.evaluate("https://twitter.net/", true, false));
+        assertEquals(BLOCK_ADULT, signIn.evaluate("https://twitter.net/"));
     }
 
     @Test public void xAndOrdinarySitesAreNotAdult() {
@@ -166,8 +165,6 @@ public final class SearchAndCommunityTest {
     @Test public void googleSignInCannotReturnToACommunity() {
         var policy = new NavigationPolicy("https://accounts.google.com/AccountChooser?continue="
                 + encode("https://www.reddit.com/") + "&service=wise");
-        assertFalse(policy.isAuthenticating());
-        assertEquals("accounts.google.com", policy.lockedHost());
-        assertEquals(BLOCK_COMMUNITY, policy.evaluate("https://www.reddit.com/", true, false));
+        assertEquals(BLOCK_COMMUNITY, policy.evaluate("https://www.reddit.com/"));
     }
 }

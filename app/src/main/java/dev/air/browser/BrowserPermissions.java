@@ -43,9 +43,8 @@ final class BrowserPermissions implements PermissionDelegate {
     }
 
     @Override public @Nullable GeckoResult<Integer> onContentPermissionRequest(@NonNull GeckoSession session, @NonNull ContentPermission permission) {
-        if (permission.permission == PERMISSION_STORAGE_ACCESS) {
-            return GeckoResult.fromValue(activity.isAuthenticating() ? ContentPermission.VALUE_ALLOW : ContentPermission.VALUE_DENY);
-        }
+        // Embedded sign-ins and payments ask for this after a tap, at whatever point in the visit they appear.
+        if (permission.permission == PERMISSION_STORAGE_ACCESS) return GeckoResult.fromValue(ContentPermission.VALUE_ALLOW);
         // Autoplay, notifications, tracker exceptions and persistent-storage grants stay disabled.
         if (permission.permission != PERMISSION_GEOLOCATION) return GeckoResult.fromValue(ContentPermission.VALUE_DENY);
         if (dialog != null && dialog.isShowing()) return GeckoResult.fromValue(ContentPermission.VALUE_DENY);

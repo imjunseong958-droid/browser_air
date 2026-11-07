@@ -5,43 +5,50 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/paper">
+    android:background="@drawable/bg_home">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:paddingHorizontal="24dp"
-        android:paddingTop="16dp"
-        android:paddingBottom="16dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="64dp" android:gravity="center_vertical" android:paddingHorizontal="28dp">
+        <ImageView android:layout_width="30dp" android:layout_height="30dp" android:background="@drawable/bg_logo_badge" android:src="@drawable/ic_air" app:tint="@color/paper" android:importantForAccessibility="no" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/app_name" android:textColor="@color/ink" android:textSize="16sp" android:textStyle="bold" android:letterSpacing="0.14" />
+    </LinearLayout>
 
-        <LinearLayout android:layout_width="match_parent" android:layout_height="48dp" android:gravity="center_vertical">
-            <ImageView android:layout_width="36dp" android:layout_height="36dp" android:background="@drawable/bg_logo_badge" android:src="@drawable/ic_air" app:tint="@color/paper" android:importantForAccessibility="no" />
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp" android:text="@string/app_name" android:textColor="@color/ink" android:textSize="20sp" android:textStyle="bold" android:letterSpacing="0.1" />
+    <!-- A long verse or a large system font scrolls here rather than pushing the search bar off the screen. -->
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true" android:overScrollMode="never" android:scrollbars="none">
+        <LinearLayout
+            android:id="@+id/verse"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingHorizontal="28dp"
+            android:paddingVertical="24dp">
+            <TextView android:id="@+id/verseReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/accent" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.02" />
+            <TextView android:id="@+id/verseKorean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:textColor="@color/ink" android:textSize="23sp" android:fontFamily="serif" android:lineSpacingMultiplier="1.42" />
+            <View android:layout_width="28dp" android:layout_height="1.5dp" android:layout_marginTop="24dp" android:background="@color/breeze" />
+            <TextView android:id="@+id/verseEnglish" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:textColor="@color/muted" android:textSize="15sp" android:textStyle="italic" android:fontFamily="serif" android:lineSpacingMultiplier="1.38" />
+            <TextView android:id="@+id/verseEnglishReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/muted" android:textSize="12sp" />
         </LinearLayout>
+    </ScrollView>
 
-        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1" />
-
-        <dev.air.browser.AirArtworkView android:layout_width="match_parent" android:layout_height="200dp" android:importantForAccessibility="no" />
-
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingTop="4dp" android:paddingBottom="8dp" android:clipToPadding="false">
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/searchButton"
             style="@style/Air.SearchPill"
             android:layout_width="match_parent"
             android:layout_height="58dp"
-            android:layout_marginTop="32dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="@color/ink"
+            android:outlineSpotShadowColor="@color/ink"
             android:text="@string/search_open"
             app:drawableStartCompat="@drawable/ic_search"
             app:drawableTint="@color/ink" />
-        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1.4" />
-
-        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/muted" android:textSize="12sp" android:visibility="gone" />
+        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/muted" android:textSize="12sp" android:visibility="gone" />
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/updateButton"
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="match_parent"
             android:layout_height="44dp"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="@string/update_check"
             android:textAllCaps="false"
             android:textColor="@color/muted"

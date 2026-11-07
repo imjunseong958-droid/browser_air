@@ -16,6 +16,7 @@ import android.view.inputmethod.EditorInfo;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDialog;
@@ -24,9 +25,13 @@ import dev.air.browser.databinding.DialogSearchBinding;
 import dev.air.navigation.NavigationPolicy;
 
 public final class HomeActivity extends AppCompatActivity {
+    private static final String SHOWN_VERSE = "shown_verse";
     private ActivityResultLauncher<Intent> roleLauncher;
     private ActivityHomeBinding ui;
     private HomeUpdates updates;
+    private Verses verses;
+    private int shownVerse;
+    private boolean returningFromBrowser;
 
     @Override protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -36,10 +41,25 @@ public final class HomeActivity extends AppCompatActivity {
         AirInsets.apply(this, ui.root);
         ui.searchButton.setOnClickListener(view -> showSearch());
         updates = new HomeUpdates(this, ui.updateButton);
+        verses = new Verses(this);
+        // Turning the screen keeps the verse; opening the app shows the next one.
+        showVerse(state == null ? verses.next() : state.getInt(SHOWN_VERSE));
         if (state == null && !getPreferences(MODE_PRIVATE).getBoolean("setup_seen", false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("setup_seen", true).apply();
             ui.root.post(this::showSetup);
         }
+    }
+
+    /** Coming back to AIR from elsewhere counts as opening it; closing a page opened from here does not. */
+    @Override protected void onRestart() {
+        super.onRestart();
+        if (!returningFromBrowser) showVerse(verses.next());
+        returningFromBrowser = false;
+    }
+
+    @Override protected void onSaveInstanceState(@NonNull Bundle state) {
+        super.onSaveInstanceState(state);
+        state.putInt(SHOWN_VERSE, shownVerse);
     }
 
     @Override protected void onResume() {
@@ -49,7 +69,20 @@ public final class HomeActivity extends AppCompatActivity {
         updates.resume();
     }
 
-    /** One typed query opens Google's SafeSearch text results or YouTube results; there is no suggestion list or history. */
+    private void showVerse(int index) {
+        shownVerse = index;
+        Verses.Verse verse = verses.get(index);
+        ui.verseReference.setText(verse.referenceKo());
+        // Word joiners keep each Korean word whole at a line's end on every Android version and device language.
+        ui.verseKorean.setText(verse.ko().replaceAll("(?<=\\S)(?=\\S)", "⁠"));
+        ui.verseKorean.setContentDescription(verse.ko());
+        ui.verseEnglish.setText(verse.en());
+        ui.verseEnglishReference.setText(verse.referenceEn());
+        ui.verse.setAlpha(0f);
+        ui.verse.animate().alpha(1f).setDuration(450).start();
+    }
+
+    /** One typed query opens Google's SafeSearch text results; there is no suggestion list or history. */
     private void showSearch() {
         DialogSearchBinding search = DialogSearchBinding.inflate(getLayoutInflater());
         AppCompatDialog dialog = new AppCompatDialog(this, R.style.Air_Spotlight);
@@ -75,27 +108,25 @@ public final class HomeActivity extends AppCompatActivity {
                 search.results.setVisibility(terms.isEmpty() ? View.GONE : View.VISIBLE);
                 search.clearButton.setVisibility(text.length() > 0 ? View.VISIBLE : View.GONE);
                 search.googleQuery.setText(terms);
-                search.youtubeQuery.setText(terms);
             }
         });
         search.clearButton.setOnClickListener(view -> search.terms.setText(""));
         search.googleButton.setOnClickListener(view -> {
-            if (openSearch(NavigationPolicy.searchUrl(search.terms.getText().toString()))) dialog.dismiss();
-        });
-        search.youtubeButton.setOnClickListener(view -> {
-            if (openSearch(NavigationPolicy.youtubeSearchUrl(search.terms.getText().toString()))) dialog.dismiss();
+            if (openSearch(search.terms.getText().toString())) dialog.dismiss();
         });
         search.terms.setOnEditorActionListener((view, action, event) -> {
             if (action != EditorInfo.IME_ACTION_SEARCH) return false;
-            if (openSearch(NavigationPolicy.searchUrl(search.terms.getText().toString()))) dialog.dismiss();
+            if (openSearch(search.terms.getText().toString())) dialog.dismiss();
             return true;
         });
         dialog.show();
         search.terms.requestFocus();
     }
 
-    private boolean openSearch(String url) {
+    private boolean openSearch(String terms) {
+        String url = NavigationPolicy.searchUrl(terms);
         if (url == null) return false;
+        returningFromBrowser = true;
         startActivity(new Intent(this, BrowserActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url)));
         return true;
     }

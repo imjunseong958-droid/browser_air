@@ -15,6 +15,12 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="air-test-callback" android:host="oauth" android:path="/return" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="air-test-app" />
+            </intent-filter>
         </activity>
     </application>
 </manifest>
