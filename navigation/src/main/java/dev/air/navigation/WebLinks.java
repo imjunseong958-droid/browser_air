@@ -140,8 +140,8 @@ final class WebLinks {
                 "search.yahoo.com", "search.naver.com", "m.search.naver.com", "search.daum.net",
                 "search.brave.com", "ecosia.org", "yandex.com", "yandex.ru", "baidu.com").contains(host)) return true;
         if (Set.of("youtube.com", "m.youtube.com").contains(host)) {
-            // Search results stay open; the home feed, subscriptions and Shorts do not.
-            return path.equals("/") || at(path, "/feed") || at(path, "/shorts");
+            // The home page opens with its feed hidden by the built-in extension; subscriptions and Shorts do not.
+            return at(path, "/feed") || at(path, "/shorts");
         }
         if (Set.of("x.com", "twitter.com", "mobile.twitter.com").contains(host)) {
             return path.equals("/") || at(path, "/home") || at(path, "/explore") || at(path, "/search");

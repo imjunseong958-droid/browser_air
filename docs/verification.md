@@ -2,6 +2,12 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## YouTube opens again — 8 November 2026
+
+YouTube's home page shared the "other search engines" refusal, and the row that opened YouTube's search results left the search card on 7 November, so a link to YouTube was refused. The home page now opens with its feed hidden; subscriptions, Shorts, and video-to-video moves stay blocked. The hiding rules also cover the whole recommendation block under a video and the player's end screen.
+
+The rules were checked by adding them to live `m.youtube.com` pages in the desktop app's browser pane (Chromium, phone size, signed out), not in GeckoView. On a video page all 72 links to other videos stopped being visible, while the video, title, and comments stayed. The home page has the `FEwhat_to_watch` tab the rule targets, but signed out it listed no videos, so hiding a filled feed was not seen. The player's end-screen rules were not seen working. This machine has no JDK or emulator, so the tests were left to CI and nothing was run on a device.
+
 ## Legacy task blocking removed, home verses, and a quieter search — 7 November 2026
 
 AIR had moved to blocking harmful sites and holding back YouTube's recommendations, but the earlier "one task" rules were still refusing ordinary use, mostly with the message 지금 작업과 연결되지 않은 이동이에요. The task boundary, its 15-minute sign-in limits, and the work-only blocks on Google Docs and Drive lists, GitHub search, and the Google, Naver, and Daum home pages are gone. Adult sites, communities, unfiltered search, X feeds, and the YouTube rules are unchanged. The YouTube row left the search card, and home now shows a Bible verse in Korean and English.

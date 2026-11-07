@@ -62,12 +62,18 @@ public final class SearchAndCommunityTest {
         assertEquals(ALLOW, NavigationPolicy.evaluateFrame(SAFE));
     }
 
-    @Test public void youtubeSearchResultsOpenButItsFeedsAndShortsDoNot() {
+    @Test public void youtubeOpensButItsFeedsAndShortsDoNot() {
         String results = "https://m.youtube.com/results?search_query=night+pharmacy";
         assertEquals(ALLOW, NavigationPolicy.entryDecision(results));
         assertEquals(ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", results));
         assertEquals(ALLOW, NavigationPolicy.entryDecision("https://youtube.com/watch?v=example"));
-        for (String url : new String[] {"https://m.youtube.com/", "https://youtube.com/", "https://www.youtube.com/feed/subscriptions",
+        // The home page opens, with its feed hidden by the built-in extension.
+        for (String url : new String[] {"https://m.youtube.com/", "https://www.youtube.com/", "https://youtube.com/"}) {
+            assertEquals(url, ALLOW, NavigationPolicy.entryDecision(url));
+            assertEquals(url, ALLOW, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", url));
+            assertEquals(url, ALLOW, loaded(SAFE).evaluate(url));
+        }
+        for (String url : new String[] {"https://www.youtube.com/feed/subscriptions", "https://m.youtube.com/feed/subscriptions",
                 "https://m.youtube.com/shorts/x"}) {
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.entryDecision(url));
             assertEquals(url, BLOCK_SEARCH, NavigationPolicy.pageChange("https://m.youtube.com/watch?v=a", url));
