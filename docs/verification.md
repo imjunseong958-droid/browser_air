@@ -2,6 +2,32 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Legacy task blocking removed, home verses, and a quieter search — 7 November 2026
+
+AIR had moved to blocking harmful sites and holding back YouTube's recommendations, but the earlier "one task" rules were still refusing ordinary use, mostly with the message 지금 작업과 연결되지 않은 이동이에요. The task boundary, its 15-minute sign-in limits, and the work-only blocks on Google Docs and Drive lists, GitHub search, and the Google, Naver, and Daum home pages are gone. Adult sites, communities, unfiltered search, X feeds, and the YouTube rules are unchanged. The YouTube row left the search card, and home now shows a Bible verse in Korean and English.
+
+New tests were run against the code before this change first, with one control test (an ordinary link) that passed:
+
+| Failed before the change | Cause |
+|---|---|
+| A third new-window link did nothing | The popup limit refused it as an unrelated move |
+| Links such as `?ids=1\|2`, `?q={x}`, `?q=a^b`, and `#/route\|x` | `java.net.URI` rejected them, which was treated as an unrelated move |
+| An app link, tested with a custom scheme; `tel:`, mail, and payment apps take the same path | Every non-web scheme was treated as an unrelated move |
+| A `srcdoc` frame, the first checked; `blob:` and `data:` frames take the same path | Refused without a message, because they have no web address |
+| Back after a failed link closed everything | The error screen assumed one task |
+| Retry after a failed link went to the first page | Same assumption |
+
+Saving a file a page makes itself also failed, for two reasons: a trace showed the `blob:` load request reaching the policy, which the old code refused, and then its `statusCode=0` being treated as a failed download. The test's failure before the change came from a mistake in its own page, so the old refusal rests on the trace and code reading. The test passes now.
+
+Google link wrappers with an empty `q` next to `url` and hosts with an underscore were also refused. These were found by reading the code and a parser check on the JVM, and no page loaded through them was tested.
+
+- **41 navigation/Firebase tests** and **14 update tests** passed, along with five verse tests covering every bundled verse, the shuffled order, and consecutive launches differing. Debug and optimized release builds passed; both Lint variants reported zero errors. Release-publication tests passed.
+- **23 browser and seven updater integration tests** passed on the Android 15 / API 35 emulator, including all of the table above, address parsing on Android's own URL classes, five launches in a row showing different verses, the verse staying through a rotation and changing when AIR is reopened, and no YouTube row in search.
+- Home across several launches, the search card with a query, a blocked entry, a failed page, and a loaded page's header with its lock were checked on the emulator.
+- Every Korean verse was compared with a second digital copy (scrollmapper `KorRV`) and read through. The only differences were psalm titles, which are left out. Both copies share the typing error in 빌립보서 4:19, so they are probably not independent; that verse was confirmed against YouVersion's 개역한글. A shared error elsewhere would rest on the read-through alone.
+
+Physical devices, Android 10–14, real payment apps, and real KakaoTalk or banking links were not tested. The engine stays GeckoView.
+
 ## Updates go straight to the newest release — 28 October 2026
 
 Tapping the update button installed the release remembered from the last check, so a newer release published since then appeared only after that install and the next daily check. The button now fetches the latest manifest first, and installing the remembered release makes the next check due at once. The search card no longer moves while the keyboard opens. The four Dependabot action updates ship in the same release: `setup-java` 6.1.0, `setup-android` 4.0.4, `upload-artifact` 7.0.2, and `download-artifact` 8.0.2, each pinned SHA confirmed against its official tag.

@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">AIR</string>
-    <string name="brand_descriptor">필요한 연결만, AIR</string>
     <string name="search_open">검색</string>
     <string name="search_hint">검색</string>
     <string name="clear">지우기</string>
     <string name="search_action">Google</string>
-    <string name="search_youtube">YouTube</string>
     <string name="home_hint_not_default">기본 브라우저로 설정하면 앱 링크도 열려요.</string>
     <string name="setup_title">기본 브라우저로 설정할까요?</string>
     <string name="setup_body">다른 앱에서 누른 링크가 AIR에서 열려요.</string>
@@ -16,21 +14,18 @@
     <string name="finish_session">끝내기</string>
     <string name="back">뒤로</string>
     <string name="retry">다시 시도</string>
-    <string name="auth_session">로그인에 필요한 연결</string>
     <string name="invalid_link">열 수 없는 링크예요</string>
     <string name="invalid_link_body">AIR는 HTTP 또는 HTTPS 웹 링크만 열 수 있어요.</string>
-    <string name="search_blocked">새로운 탐색은 여기서 멈춰요</string>
-    <string name="search_blocked_body">추천 목록과 다른 검색 엔진은 열지 않아요.</string>
+    <string name="search_blocked">추천 화면과 다른 검색 엔진은 열지 않아요</string>
+    <string name="search_blocked_body">검색은 AIR 첫 화면에서 할 수 있어요.</string>
     <string name="site_blocked">이 사이트는 AIR에서 열지 않아요</string>
     <string name="recommendation_blocked">추천 영상으로는 넘어가지 않아요</string>
     <string name="community_blocked_body">커뮤니티는 AIR에서 열 수 없어요.</string>
     <string name="adult_blocked_body">성인 사이트는 AIR에서 열 수 없어요.</string>
-    <string name="navigation_blocked">지금 작업과 연결되지 않은 이동이에요</string>
-    <string name="navigation_blocked_body">열린 작업에 필요한 연결인지 확인할 수 없어요. 원래 링크에서 다시 시작해 주세요.</string>
     <string name="connection_error">연결하지 못했어요</string>
     <string name="connection_error_body">네트워크 연결과 사이트 상태를 확인한 후 다시 시도하세요. 성인·유해 사이트와 안전하지 않은 인증서는 열리지 않아요.</string>
     <string name="engine_crash">페이지가 멈췄어요</string>
-    <string name="engine_crash_body">다시 시도하면 이 링크에서 새로 시작합니다.</string>
+    <string name="engine_crash_body">다시 시도하면 이 페이지를 새로 불러와요.</string>
     <string name="connection_details">연결 정보</string>
     <string name="secure_connection">암호화된 HTTPS 연결</string>
     <string name="insecure_connection">암호화되지 않은 HTTP 연결</string>
@@ -49,12 +44,13 @@
     <string name="camera_microphone_request">이 사이트에서 카메라와 마이크를 사용하도록 허용할까요?</string>
     <string name="upload_file">파일 선택</string>
     <string name="app_not_found">돌아갈 앱을 찾지 못했어요. 원래 앱이 설치되어 있는지 확인하세요.</string>
-    <string name="external_action_blocked">사이트 밖으로 연결되는 동작은 허용하지 않아요.</string>
+    <string name="open_app_title">앱에서 열까요?</string>
+    <string name="open_app_action">열기</string>
+    <string name="open_app_missing">이 링크를 열 앱을 찾지 못했어요.</string>
     <string name="download_file">파일 저장</string>
     <string name="save">저장</string>
     <string name="download_saved">파일을 저장했어요.</string>
     <string name="download_failed">파일을 저장하지 못했어요. 네트워크와 저장 공간을 확인하세요. 최대 100MB까지 저장할 수 있어요.</string>
-    <string name="auth_expired">인증 연결 시간이 지났어요. 원래 앱에서 로그인을 다시 시작하세요.</string>
     <string name="update_check">업데이트 확인</string>
     <string name="update_checking">새 버전을 확인하고 있어요…</string>
     <string name="update_available">AIR %1$s 업데이트</string>

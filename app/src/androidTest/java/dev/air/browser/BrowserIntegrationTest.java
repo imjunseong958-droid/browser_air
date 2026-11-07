@@ -7,6 +7,8 @@ import android.content.ComponentName;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.SystemClock;
+import android.widget.TextView;
+import androidx.lifecycle.Lifecycle;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -19,6 +21,8 @@ import androidx.browser.customtabs.CustomTabsSession;
 import androidx.browser.customtabs.CustomTabsServiceConnection;
 import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsIntent;
+import dev.air.navigation.NavigationPolicy;
+import dev.air.navigation.WebAddress;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.ServerSocket;
@@ -83,7 +87,7 @@ public final class BrowserIntegrationTest {
 
     @Test public void searchEntryNeverStartsEngine() {
         open("https://www.bing.com/search?q=test");
-        text("새로운 탐색은 여기서 멈춰요");
+        text("추천 화면과 다른 검색 엔진은 열지 않아요");
         scenario.onActivity(activity -> assertNull(((GeckoView) activity.findViewById(R.id.geckoView)).getSession()));
     }
 
@@ -108,12 +112,53 @@ public final class BrowserIntegrationTest {
             UiObject2 field = device.wait(Until.findObject(By.clazz("android.widget.EditText")), 10_000);
             assertNotNull(field);
             field.setText("night pharmacy");
-            text("Google").click();
+            UiObject2 google = text("Google");
+            assertFalse("YouTube search should be gone", device.hasObject(By.text("YouTube")));
+            google.click();
             var browser = InstrumentationRegistry.getInstrumentation().waitForMonitorWithTimeout(opened, 10_000);
             assertNotNull("Search did not open the browser", browser);
             assertEquals("https://www.google.com/search?q=night+pharmacy&udm=14&safe=active", browser.getIntent().getDataString());
             browser.finish();
         } finally { InstrumentationRegistry.getInstrumentation().removeMonitor(opened); }
+    }
+
+    private String shownVerse(ActivityScenario<HomeActivity> home) {
+        AtomicReference<String> shown = new AtomicReference<>();
+        home.onActivity(activity -> {
+            String korean = ((TextView) activity.findViewById(R.id.verseKorean)).getText().toString();
+            String english = ((TextView) activity.findViewById(R.id.verseEnglish)).getText().toString();
+            String reference = ((TextView) activity.findViewById(R.id.verseReference)).getText().toString();
+            String englishReference = ((TextView) activity.findViewById(R.id.verseEnglishReference)).getText().toString();
+            assertFalse(korean.isEmpty() || english.isEmpty() || reference.isEmpty() || englishReference.isEmpty());
+            shown.set(reference);
+        });
+        return shown.get();
+    }
+
+    @Test public void everyLaunchShowsADifferentVerseInBothLanguages() {
+        Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        app.getSharedPreferences("HomeActivity", Context.MODE_PRIVATE).edit().putBoolean("setup_seen", true).commit();
+        String previous = null;
+        for (int launch = 0; launch < 5; launch++) {
+            try (var home = ActivityScenario.launch(HomeActivity.class)) {
+                String shown = shownVerse(home);
+                assertNotEquals(previous, shown);
+                previous = shown;
+            }
+        }
+    }
+
+    @Test public void aVerseStaysWhenTheScreenTurnsAndChangesWhenAirIsOpenedAgain() {
+        Context app = InstrumentationRegistry.getInstrumentation().getTargetContext();
+        app.getSharedPreferences("HomeActivity", Context.MODE_PRIVATE).edit().putBoolean("setup_seen", true).commit();
+        try (var home = ActivityScenario.launch(HomeActivity.class)) {
+            String shown = shownVerse(home);
+            home.recreate();
+            assertEquals(shown, shownVerse(home));
+            home.moveToState(Lifecycle.State.CREATED);
+            home.moveToState(Lifecycle.State.RESUMED);
+            assertNotEquals(shown, shownVerse(home));
+        }
     }
 
     @Test public void sameSiteAndCrossSiteLinksOpenWithoutAPrompt() {
@@ -154,6 +199,85 @@ public final class BrowserIntegrationTest {
         text("CLOSE_POPUP").click();
         text("SAME_SITE_LINK");
         awaitUrl("/");
+    }
+
+    @Test public void aThirdNewWindowLinkStillOpens() {
+        open(server.url("/windows1"));
+        text("NEW_WINDOW_2").click();
+        text("NEW_WINDOW_3").click();
+        text("NEW_WINDOW_4").click();
+        text("LAST_WINDOW");
+    }
+
+    @Test public void linksWithUnusualCharactersOpen() {
+        open(server.url("/unusual"));
+        for (String link : new String[] {"PIPE_LINK", "BRACE_LINK", "CARET_LINK", "ROUTE_LINK"}) {
+            text(link).click();
+            text("QUERY_PAGE");
+            device.pressBack();
+        }
+        text("PIPE_LINK");
+    }
+
+    /** Android's IDN and URI classes are not the JVM's, which the navigation unit tests run on. */
+    @Test public void unusualAddressesAreReadCorrectlyOnAndroid() {
+        assertEquals("my_site.tistory.com", WebAddress.parse("https://my_site.tistory.com/1").host());
+        assertEquals("xn--3e0b707e.kr", WebAddress.parse("https://한국.kr/").host());
+        assertEquals("example.com", WebAddress.parse("https://EXAMPLE.COM./path").host());
+        assertEquals("1|2", WebAddress.parse("https://shop.example/list?ids=1|2").parameters().get("ids"));
+        assertEquals("/100%/off", WebAddress.parse("https://shop.example/100%/off").path());
+        for (String refused : new String[] {"https://x.test\\@evil.test/", "https://exa*mple.com/", "https://user:pass@example.com/"}) {
+            assertNull(refused, WebAddress.parse(refused));
+        }
+        assertEquals(NavigationPolicy.Decision.BLOCK_ADULT, NavigationPolicy.entryDecision("https://my_mirror.nimi.wiki/x|y"));
+    }
+
+    @Test public void appLinksOpenTheirApp() {
+        open(server.url("/apps"));
+        text("APP_LINK").click();
+        text("AUTH_CALLBACK_RECEIVED");
+    }
+
+    @Test public void aPageMustAskBeforeOpeningAnAppOnItsOwn() {
+        open(server.url("/auto-app"));
+        text("앱에서 열까요?");
+        text("열기").click();
+        text("AUTH_CALLBACK_RECEIVED");
+    }
+
+    @Test public void framesWithoutAWebAddressRender() {
+        open(server.url("/frames"));
+        text("SRCDOC_FRAME");
+        text("BLOB_FRAME");
+        text("DATA_FRAME");
+    }
+
+    @Test public void filesMadeByAPageCanBeSaved() {
+        open(server.url("/download"));
+        text("BLOB_DOWNLOAD").click();
+        text("파일 저장");
+        text("note.txt");
+    }
+
+    @Test public void backFromAFailedLinkReturnsToThePage() {
+        open(server.url("/dead"));
+        text("DEAD_LINK").click();
+        text("연결하지 못했어요");
+        device.pressBack();
+        device.waitForIdle();
+        assertEquals(Lifecycle.State.RESUMED, scenario.getState());
+        awaitUrl("/dead");
+        scenario.onActivity(activity -> assertEquals(android.view.View.GONE, activity.findViewById(R.id.errorPanel).getVisibility()));
+    }
+
+    @Test public void retryLoadsTheFailedLinkAgain() throws Exception {
+        open(server.url("/dead"));
+        text("DEAD_LINK").click();
+        text("연결하지 못했어요");
+        try (FixtureServer revived = new FixtureServer(server.deadPort)) {
+            text("다시 시도").click();
+            text("INSIDE_PAGE");
+        }
     }
 
     @Test public void scopedOAuthCallbackReturnsToInstalledApp() {
@@ -222,9 +346,13 @@ public final class BrowserIntegrationTest {
         private final Thread thread;
         private volatile boolean running = true;
         final AtomicBoolean otherHostVisited = new AtomicBoolean();
+        final int deadPort;
 
-        FixtureServer() throws Exception {
-            socket = new ServerSocket(0);
+        FixtureServer() throws Exception { this(0); }
+
+        FixtureServer(int port) throws Exception {
+            socket = new ServerSocket(port);
+            try (ServerSocket closed = new ServerSocket(0)) { deadPort = closed.getLocalPort(); }
             thread = new Thread(this::serve, "AIR-test-http");
             thread.setDaemon(true);
             thread.start();
@@ -248,6 +376,23 @@ public final class BrowserIntegrationTest {
                             + "<a target='_blank' href='" + other + "'>OTHER_SITE_POPUP</a>";
                     else if (route.equals("/outside")) content = "<h1>OTHER_HOST</h1>";
                     else if (route.equals("/popup")) content = "<h1>POPUP_PAGE</h1><button onclick='window.close()'>CLOSE_POPUP</button>";
+                    else if (route.equals("/windows1")) content = "<a target='_blank' href='/windows2'>NEW_WINDOW_2</a>";
+                    else if (route.equals("/windows2")) content = "<a target='_blank' href='/windows3'>NEW_WINDOW_3</a>";
+                    else if (route.equals("/windows3")) content = "<a target='_blank' href='/windows4'>NEW_WINDOW_4</a>";
+                    else if (route.equals("/windows4")) content = "<h1>LAST_WINDOW</h1>";
+                    else if (route.equals("/unusual")) content = "<a href='/query?ids=1|2'>PIPE_LINK</a><a href='/query?q={x}'>BRACE_LINK</a>"
+                            + "<a href='/query?q=a^b'>CARET_LINK</a><a href='/query#/route|x'>ROUTE_LINK</a>";
+                    else if (route.startsWith("/query")) content = "<h1>QUERY_PAGE</h1>";
+                    else if (route.equals("/apps")) content = "<a href='air-test-app://open/x'>APP_LINK</a>";
+                    else if (route.equals("/auto-app")) content = "<h1>AUTO_APP</h1><script>setTimeout(function(){"
+                            + "location.href='air-test-app://open/y'},800)</script>";
+                    else if (route.equals("/frames")) content = "<iframe srcdoc='<h1>SRCDOC_FRAME</h1>'></iframe><iframe id='b'></iframe>"
+                            + "<iframe src='data:text/html,<h1>DATA_FRAME</h1>'></iframe><script>document.getElementById('b').src="
+                            + "URL.createObjectURL(new Blob(['<h1>BLOB_FRAME</h1>'],{type:'text/html'}))</script>";
+                    else if (route.equals("/download")) content = "<button onclick=\"var a=document.createElement('a');"
+                            + "a.href=window.URL.createObjectURL(new Blob(['hi'],{type:'text/plain'}));a.download='note.txt';"
+                            + "document.body.appendChild(a);a.click()\">BLOB_DOWNLOAD</button>";
+                    else if (route.equals("/dead")) content = "<a href='http://localhost:" + deadPort + "/inside'>DEAD_LINK</a>";
                     else content = "<h1>FIXTURE_HOME</h1><a href='/inside'>SAME_SITE_LINK</a><br>"
                             + "<button onclick=\"location.href='" + other + "'\">SCRIPT_ESCAPE</button><br>"
                             + "<button onclick=\"window.open('/popup','login')\">LOGIN_POPUP</button>";

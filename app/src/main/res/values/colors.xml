@@ -1,13 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="paper">#F6F5F0</color>
-    <color name="ink">#223D35</color>
+    <color name="paper">#F8F7F2</color>
+    <color name="paper_deep">#EDF0E7</color>
+    <color name="ink">#1F3A32</color>
     <color name="ink_pressed">#305C4B</color>
-    <color name="muted">#68736A</color>
-    <color name="line">#DCE1D8</color>
-    <color name="sage">#E8EDE4</color>
+    <color name="accent">#3C7A63</color>
+    <color name="muted">#667169</color>
+    <color name="line">#DFE3DA</color>
+    <color name="sage">#EAEEE5</color>
     <color name="mint">#DDE7DB</color>
     <color name="mint_pressed">#C9D8C7</color>
-    <color name="breeze">#C3CEBF</color>
+    <color name="breeze">#B7C6B6</color>
+    <color name="caution">#B4541A</color>
     <color name="white">#FFFFFF</color>
 </resources>

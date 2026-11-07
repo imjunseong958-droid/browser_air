@@ -44,10 +44,13 @@ final class WebLinks {
             if (!address.normalizedPath().equals("/url")) return input;
             if (depth == 4 || !address.scheme().equals("https") || address.port() != 443) return null;
             Map<String, String> query = address.parameters();
-            String destination = query.getOrDefault("url", query.get("q"));
-            if (destination == null || (query.containsKey("url") && query.containsKey("q")
-                    && !query.get("url").equals(query.get("q"))) || WebAddress.parse(destination) == null) return null;
-            input = destination;
+            // Google's own links often carry an empty q, or the search terms, beside the destination in url.
+            String url = query.get("url");
+            String q = query.get("q");
+            boolean urlIsWeb = WebAddress.parse(url) != null;
+            boolean qIsWeb = WebAddress.parse(q) != null;
+            if ((!urlIsWeb && !qIsWeb) || (urlIsWeb && qIsWeb && !url.equals(q))) return null;
+            input = urlIsWeb ? url : q;
         }
         return null;
     }
@@ -55,11 +58,6 @@ final class WebLinks {
     static String searchUrl(String terms) {
         if (terms == null || terms.isBlank()) return null;
         return SAFE_SEARCH + "?q=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8) + "&udm=14&safe=active";
-    }
-
-    static String youtubeSearchUrl(String terms) {
-        if (terms == null || terms.isBlank()) return null;
-        return "https://m.youtube.com/results?search_query=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8);
     }
 
     /** Going straight from one video to another follows a recommendation, unless both share a chosen playlist. */
@@ -119,20 +117,24 @@ final class WebLinks {
         return false;
     }
 
+    /**
+     * Search that SafeSearch does not cover, and the feeds that keep recommending: YouTube's, and X's, where adult
+     * videos circulate. Google's home page stays open because every search from it becomes SafeSearch text results.
+     */
     static boolean isDiscovery(WebAddress address) {
         String host = address.host().startsWith("www.") ? address.host().substring(4) : address.host();
         String path = address.normalizedPath().toLowerCase(Locale.ROOT);
         if (host.startsWith("google.")) {
-            return path.equals("/") || (at(path, "/search") && !isSafeSearch(address)) || at(path, "/webhp")
+            return (at(path, "/search") && !isSafeSearch(address))
                     || at(path, "/imghp") || at(path, "/images") || at(path, "/videohp")
-                    || at(path, "/shopping") || at(path, "/discover") || at(path, "/recaptcha");
+                    || at(path, "/shopping") || at(path, "/discover");
         }
         if (Set.of("bing.com", "cn.bing.com").contains(host)) {
             return path.equals("/") || at(path, "/search") || at(path, "/images")
                     || at(path, "/videos") || at(path, "/news");
         }
         if (Set.of("naver.com", "m.naver.com", "daum.net", "m.daum.net").contains(host)) {
-            return path.equals("/") || path.startsWith("/search") || at(path, "/feed");
+            return path.startsWith("/search");
         }
         if (Set.of("duckduckgo.com", "html.duckduckgo.com", "lite.duckduckgo.com",
                 "search.yahoo.com", "search.naver.com", "m.search.naver.com", "search.daum.net",
@@ -143,13 +145,6 @@ final class WebLinks {
         }
         if (Set.of("x.com", "twitter.com", "mobile.twitter.com").contains(host)) {
             return path.equals("/") || at(path, "/home") || at(path, "/explore") || at(path, "/search");
-        }
-        if (host.equals("github.com")) return at(path, "/search") || at(path, "/explore") || at(path, "/trending");
-        if (host.equals("docs.google.com")) {
-            return path.equals("/") || path.matches("/(?:forms|document|spreadsheets|presentation)(?:/u/\\d+)?/?");
-        }
-        if (host.equals("drive.google.com")) {
-            return path.equals("/") || path.matches("/drive(?:/u/\\d+)?(?:/(?:home|my-drive|shared-with-me|recent|search))?/?");
         }
         return false;
     }

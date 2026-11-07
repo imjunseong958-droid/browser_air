@@ -43,8 +43,6 @@ final class FirebaseAuthBridge {
         return false;
     }
 
-    boolean isActive() { return flow.isActive(); }
-
     boolean handle(String raw) {
         if (!flow.isActive() || raw.length() > 32768) return false;
         try {
