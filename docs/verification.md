@@ -2,6 +2,14 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Sideways full screen and Korean captions — 8 November 2026
+
+Sideways, the browser hid nothing: the status bar's white strip stayed above the page and shrank YouTube's video. Turning the phone sideways now hides the system bars and fills the screen; only a camera cutout keeps a black strip. A video's full screen fills the cutout area too. Upright pages keep the status bar strip.
+
+The YouTube extension (version 1.2) gains `captions.js`, which turns captions on in Korean for each video through the player's own caption API: a Korean track when there is one, otherwise YouTube's auto-translation to Korean. It acts once per video and gives up after about 10 seconds when a video has no captions.
+
+The track choice was checked with Node against stub players. YouTube, the Android SDK, and Mozilla's Maven repository are not reachable from this machine, so the build was left to CI and neither change was run in GeckoView or on a device.
+
 ## YouTube opens again — 8 November 2026
 
 YouTube's home page shared the "other search engines" refusal, and the row that opened YouTube's search results left the search card on 7 November, so a link to YouTube was refused. The home page now opens with its feed hidden; subscriptions, Shorts, and video-to-video moves stay blocked. The hiding rules also cover the whole recommendation block under a video and the player's end screen.
