@@ -119,6 +119,14 @@ public final class HomeActivity extends AppCompatActivity {
             if (openSearch(search.terms.getText().toString())) dialog.dismiss();
             return true;
         });
+        // The search box moves up into the card, so the home search bar steps aside until the card closes.
+        ui.searchButton.animate().cancel();
+        ui.searchButton.animate().alpha(0f).setDuration(150).withEndAction(() -> ui.searchButton.setVisibility(View.INVISIBLE)).start();
+        dialog.setOnDismissListener(closed -> {
+            ui.searchButton.animate().cancel();
+            ui.searchButton.setVisibility(View.VISIBLE);
+            ui.searchButton.animate().alpha(1f).setDuration(200).start();
+        });
         dialog.show();
         search.terms.requestFocus();
     }
