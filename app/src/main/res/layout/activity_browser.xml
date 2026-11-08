@@ -6,12 +6,13 @@
     android:layout_height="match_parent"
     android:background="@color/paper">
 
-    <org.mozilla.geckoview.GeckoView android:id="@+id/geckoView" android:layout_width="match_parent" android:layout_height="match_parent" />
+    <dev.air.browser.AirGeckoView android:id="@+id/geckoView" android:layout_width="match_parent" android:layout_height="match_parent" />
     <LinearLayout android:id="@+id/errorPanel" android:layout_width="match_parent" android:layout_height="match_parent" android:orientation="vertical" android:gravity="center" android:padding="32dp" android:background="@color/paper" android:visibility="gone">
         <ImageView android:layout_width="84dp" android:layout_height="84dp" android:background="@drawable/bg_icon_circle" android:padding="12dp" android:src="@drawable/ic_air" android:importantForAccessibility="no" />
         <TextView android:id="@+id/errorTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="24dp" android:gravity="center" android:textColor="@color/ink" android:textSize="20sp" android:textStyle="bold" />
         <TextView android:id="@+id/errorBody" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:gravity="center" android:textColor="@color/muted" android:textSize="14sp" android:lineSpacingMultiplier="1.35" />
         <Button android:id="@+id/retryButton" style="@style/Air.PrimaryButton" android:layout_width="wrap_content" android:layout_height="52dp" android:layout_marginTop="28dp" android:minWidth="160dp" android:text="@string/retry" />
     </LinearLayout>
+    <ImageView android:id="@+id/pullIndicator" android:layout_width="40dp" android:layout_height="40dp" android:layout_gravity="top|center_horizontal" android:background="@drawable/bg_icon_circle" android:padding="8dp" android:src="@drawable/ic_refresh" android:elevation="4dp" android:importantForAccessibility="no" android:visibility="gone" />
     <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="2dp" android:layout_gravity="top" android:progressTint="@color/accent" android:progressBackgroundTint="@android:color/transparent" android:visibility="invisible" />
 </FrameLayout>

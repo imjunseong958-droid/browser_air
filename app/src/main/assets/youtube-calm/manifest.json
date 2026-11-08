@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "AIR YouTube without recommendations, with Korean captions",
-  "version": "1.2",
+  "version": "1.3",
   "browser_specific_settings": {
     "gecko": {
       "id": "youtube-calm@air.local"
