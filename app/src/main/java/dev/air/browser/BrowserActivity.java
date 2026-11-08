@@ -77,6 +77,7 @@ public final class BrowserActivity extends AppCompatActivity {
         downloads = new BrowserDownloads(this);
         permissions = new BrowserPermissions(this);
         ui.retryButton.setOnClickListener(view -> retry());
+        ui.geckoView.setPullListener(new PullToRefresh());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override public void handleOnBackPressed() {
                 GeckoSession session = active();
@@ -383,6 +384,43 @@ public final class BrowserActivity extends AppCompatActivity {
         if (shuttingDown || !sessions.contains(session) || !session.isOpen()) return;
         if (Boolean.TRUE.equals(backStates.get(session))) session.goBack();
         else session.loadUri(previous);
+    }
+
+    /** Pulling down from the top of a page shows a turning arrow; pulled far enough, letting go reloads the page. */
+    private final class PullToRefresh implements AirGeckoView.PullListener {
+        @Override public boolean canPull() {
+            GeckoSession session = active();
+            return !fullScreen && !shuttingDown && session != null && session.isOpen()
+                    && ui.errorPanel.getVisibility() != View.VISIBLE;
+        }
+
+        @Override public void onPull(float distance) {
+            float trigger = ui.geckoView.refreshDistance();
+            float size = ui.pullIndicator.getHeight() > 0 ? ui.pullIndicator.getHeight() : 40 * getResources().getDisplayMetrics().density;
+            float travel = Math.min(distance, trigger * 1.25f) * 0.6f;
+            boolean ready = distance >= trigger;
+            ui.pullIndicator.animate().cancel();
+            ui.pullIndicator.setVisibility(View.VISIBLE);
+            ui.pullIndicator.setTranslationY(travel - size);
+            ui.pullIndicator.setRotation(distance / trigger * 270f);
+            ui.pullIndicator.setAlpha(ready ? 1f : 0.35f + 0.5f * Math.min(1f, distance / trigger));
+            float scale = ready ? 1f : 0.85f;
+            ui.pullIndicator.setScaleX(scale);
+            ui.pullIndicator.setScaleY(scale);
+        }
+
+        @Override public void onPullEnd(boolean refresh) {
+            GeckoSession session = active();
+            if (refresh && canPull() && session != null) session.reload();
+            float size = ui.pullIndicator.getHeight();
+            ui.pullIndicator.animate()
+                    .translationY(-size)
+                    .alpha(0f)
+                    .rotationBy(refresh ? 360f : 0f)
+                    .setDuration(refresh ? 450 : 200)
+                    .withEndAction(() -> ui.pullIndicator.setVisibility(View.GONE))
+                    .start();
+        }
     }
 
     private void retry() {

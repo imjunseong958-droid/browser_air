@@ -2,6 +2,12 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Pull down to reload — 8 November 2026
+
+Pulling down from the top of a page now reloads it. `AirGeckoView` asks Gecko, at the start of each touch, for its input result: a pull counts only when the browser (not the page's script) handles the touch, the page cannot scroll further up, and it allows vertical overscroll. Every touch still reaches the page. Two fingers, a sideways drag, a video's full screen, and the error panel never reload. A turning arrow follows the finger and goes solid past 120 dp.
+
+This machine has no Android SDK and cannot reach Mozilla's Maven repository, so the build and lint were left to CI and the gesture was not tried in GeckoView or on a device.
+
 ## Korean captions that were not turning on — 8 November 2026
 
 On the latest release, captions still did not turn on. `captions.js` asked the player for its caption list without `includeAsr`, and YouTube leaves auto-generated (asr) tracks out of that list unless asked, so a video with only auto captions, as most have, looked like a video with no captions. The script also stopped after its first `setOption`, even when an ad or the video's start reset the captions afterwards.
