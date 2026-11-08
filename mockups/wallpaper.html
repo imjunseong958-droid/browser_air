@@ -1,0 +1,72 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--g:#B2D7A3;--ink:#1F3A32;--muted:#667169}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#e9ece6;font-family:Inter,sans-serif;display:flex;gap:44px;padding:40px 44px 36px}
+.col{display:flex;flex-direction:column;align-items:center;gap:16px}
+.lbl{font:600 17px Inter,'WenQuanYi Zen Hei';color:var(--ink)}
+.sub{font:400 13px 'WenQuanYi Zen Hei',Inter;color:var(--muted);margin-top:-10px;width:390px;text-align:center}
+.phone{width:390px;height:844px;border-radius:44px;overflow:hidden;position:relative;background:var(--g);box-shadow:0 0 0 10px #1b1d1c,0 20px 50px rgba(0,0,0,.3)}
+.status{position:absolute;top:0;left:0;right:0;height:44px;display:flex;justify-content:space-between;align-items:center;padding:0 28px;font:600 14px Inter;color:#fff;z-index:5}
+.logo{position:absolute;top:50px;left:24px;display:flex;align-items:center;gap:8px;z-index:5;font:700 14px Inter;letter-spacing:.14em;color:#fff}
+.badge{width:24px;height:24px;border-radius:8px;background:#fff;display:grid;place-items:center}
+.badge i{width:10px;height:11px;border:1.6px solid var(--g);border-bottom:none;border-radius:5px 5px 0 0;display:block}
+.dock{position:absolute;left:20px;right:20px;bottom:22px;z-index:5}
+.pill{height:56px;border-radius:28px;background:#fff;display:flex;align-items:center;gap:12px;padding:0 22px;font:400 15px 'WenQuanYi Zen Hei';color:var(--muted);box-shadow:0 6px 18px rgba(31,58,50,.18)}
+.pill svg{flex:none}
+.upd{text-align:center;font:400 12px 'WenQuanYi Zen Hei';color:#fff;margin-top:14px;opacity:.9}
+.home{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:130px;height:5px;border-radius:3px;background:rgba(255,255,255,.85);z-index:6}
+/* A */
+.crop{position:absolute;inset:0;background:url(source.jpg) center/cover}
+.crop::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(178,215,163,.95) 0,transparent 14%,transparent 70%,rgba(178,215,163,.95) 88%)}
+/* B / C wall */
+.wall{position:absolute;left:18px;right:18px;top:92px;color:#fff;font-weight:800;letter-spacing:-.02em;line-height:1.02}
+.wall p{text-align:justify;text-align-last:justify;hyphens:none}
+.mid{display:grid;grid-template-columns:1fr 76px 1fr;gap:8px;align-items:stretch}
+.door{background:#fff;position:relative;align-self:stretch;margin:6px 0 4px}
+.door::after{content:"";position:absolute;left:0;right:0;top:100%;height:36px;background:linear-gradient(rgba(255,255,255,.55),transparent)}
+.c .wall{opacity:1}
+.c .wall p,.c .wall .side{color:rgba(255,255,255,.55)}
+.c .door{display:flex;flex-direction:column;justify-content:center;padding:14px 12px;color:var(--ink);box-shadow:0 0 40px rgba(255,255,255,.7)}
+.c .door .ref{font:600 10px 'WenQuanYi Zen Hei';color:#3C7A63}
+.c .door .ko{font:400 14px/1.5 'WenQuanYi Zen Hei';margin-top:8px}
+.c .door .en{font:italic 400 10px/1.4 Inter;color:var(--muted);margin-top:10px}
+</style></head><body>
+
+<div class="col"><div class="lbl">A · 원본 그대로 (크롭)</div><div class="sub">이미지를 화면에 꽉 채움. 문이 가운데 오지만 양옆 글자가 잘림.</div>
+<div class="phone"><div class="crop"></div>
+ <div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="logo"><div class="badge"><i></i></div>AIR</div>
+ <div class="dock"><div class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F3A32" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>검색</div><div class="upd" style="color:#1F3A32">업데이트 확인</div></div>
+ <div class="home" style="background:rgba(31,58,50,.5)"></div></div></div>
+
+<!-- B and C share the wall -->
+<template id="wall"><div class="wall">
+<p style="font-size:22px">"And if I go and prepare a place for you, I will come back and take you to be with me that you also may be where I am.” John 14:3 "For the Lord himself will come down from heaven, with a loud command, with the voice of the archangel and</p>
+<div class="mid">
+ <p class="side" style="font-size:18px">with the trumpet call of God, and the dead in Christ will rise first.” 1 Thessalonians 4:16 "‘Look, he is coming with the clouds,’ and ‘every eye will see him,</p>
+ <div class="door"><SLOT/></div>
+ <p class="side" style="font-size:18px">even those who pierced him’;” Revelation 1:7 "Look, I am coming soon! Blessed is the one who keeps the words of the prophecy written in</p>
+</div>
+<p style="font-size:22px;margin-top:4px">this scroll.” Revelation 22:7 "Look, I am coming soon! My reward is with me, and I will give to each person according to what they have done.” Revelation 22:12 "He who testifies to these things says, 'Yes, I am coming soon.' Amen. Come, Lord Jesus.”</p>
+<p style="font-size:22px;text-align-last:left">Revelation 22:20</p>
+</div></template>
+
+<div class="col"><div class="lbl">B · 세로로 다시 짠 버전</div><div class="sub">같은 구성을 폰 비율로 재조판. 글자 안 잘리고 문이 화면 중앙.</div>
+<div class="phone b" id="pb"><div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="logo"><div class="badge"><i></i></div>AIR</div>
+ <div class="dock"><div class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F3A32" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>검색</div><div class="upd">업데이트 확인</div></div>
+ <div class="home"></div></div></div>
+
+<div class="col"><div class="lbl">C · 문 안에 오늘의 말씀</div><div class="sub">배경 글자는 흐리게, 열린 문 안에 매번 바뀌는 오늘의 구절.</div>
+<div class="phone c" id="pc"><div class="status"><span>9:41</span><span>●●● ▮</span></div>
+ <div class="logo"><div class="badge"><i></i></div>AIR</div>
+ <div class="dock"><div class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F3A32" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>검색</div><div class="upd">업데이트 확인</div></div>
+ <div class="home"></div></div></div>
+
+<script>
+const t=document.getElementById('wall').innerHTML;
+document.getElementById('pb').insertAdjacentHTML('afterbegin',t.replace('<slot></slot>',''));
+document.getElementById('pc').insertAdjacentHTML('afterbegin',t.replace('<slot></slot>','<div class="ref">출애굽기 14:14</div><div class="ko">여호와께서 너희를 위하여 싸우시리니 너희는 가만히 있을지니라</div><div class="en">The LORD will fight for you, and you shall be still.</div>'));
+document.querySelectorAll('.c .mid').forEach(m=>m.style.gridTemplateColumns='1fr 140px 1fr');
+document.querySelectorAll('.c .side').forEach(s=>s.style.fontSize='14px');
+</script></body></html>
