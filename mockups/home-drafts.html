@@ -1,0 +1,105 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><style>
+@import url(https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500&family=Noto+Sans+KR:wght@400;500;600&display=block);
+
+ *{box-sizing:border-box;margin:0;padding:0}
+body{background:#ecede8;font-family:Inter,"Noto Sans KR",sans-serif;color:#1c2a24;padding:48px 56px 56px;width:1712px}
+h1{font:600 22px "Noto Sans KR";margin-bottom:6px}
+.sub{font:400 14px/20px "Noto Sans KR";color:#5b665f;margin-bottom:40px}
+.row{display:flex;gap:48px;margin-bottom:48px}
+.col{width:360px}
+.cap{font:600 16px "Noto Sans KR";margin-bottom:4px}
+.cap small{display:block;font:400 13px/20px "Noto Sans KR";color:#5b665f;margin-top:4px;min-height:40px}
+.phone{position:relative;width:360px;height:800px;border-radius:28px;overflow:hidden;margin-top:16px;
+  box-shadow:0 0 0 6px #1b1d1c,0 16px 40px rgba(0,0,0,.18);display:flex;flex-direction:column}
+.status{height:32px;flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 20px;font:500 13px Inter}
+.status svg{display:block}
+.gesture{height:24px;flex:none;display:flex;justify-content:center;align-items:center}
+.gesture i{width:108px;height:4px;border-radius:2px;background:#1c2a24;opacity:.5}
+.poster{display:block;width:100%;flex:none}
+.ref{font:500 13px/20px "Noto Sans KR"}
+.ko{font:500 24px/36px "Noto Sans KR";word-break:keep-all;margin-top:8px}
+.long .ko{font-size:20px;line-height:32px}
+.en{font:400 15px/22px Inter;margin-top:16px}
+.long .en{font-size:14px;line-height:20px}
+.enref{font:400 13px/20px Inter;margin-top:4px}
+.search{height:52px;border-radius:14px;display:flex;align-items:center;gap:10px;padding:0 16px;font:400 16px "Noto Sans KR"}
+.upd{height:40px;display:flex;align-items:center;justify-content:center;font:400 13px "Noto Sans KR"}
+
+/* A: framed print on a quiet page */
+.a{background:#f3f4ef}
+.a .poster{width:320px;margin:16px 20px 0;border-radius:16px;box-shadow:0 8px 24px rgba(28,42,36,.10)}
+.a .verse{flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 28px}
+.a .ref{color:#4f6b5c}.a .ko{color:#1c2a24}.a .en{color:#4b5650}.a .enref{color:#76807a}
+.a .dock{padding:0 20px 8px}
+.a .search{background:#fff;box-shadow:0 0 0 1px rgba(28,42,36,.08),0 1px 2px rgba(0,0,0,.05);color:#76807a}
+.a .upd{color:#76807a}
+
+/* B: the green wall continues */
+.b{background:#b2d7a3}
+.b .verse{flex:1;display:flex;flex-direction:column;justify-content:center;padding:16px 36px 24px}
+.b .mark{width:6px;height:12px;background:#fff;margin-bottom:12px}
+.b .ref{color:#2f5242}.b .ko{color:#173127}.b .en{color:#2f5242}.b .enref{color:#4a6b59}
+.b .dock{padding:0 20px 8px}
+.b .search{background:#fff;color:#5d7266}
+.b .upd{color:#2f5242}
+.b .gesture i{background:#173127}
+
+/* C: the door opens onto a paper sheet */
+.c{background:#b2d7a3}
+.c .poster{margin-top:4px}
+.c .sheet{flex:1;margin-top:12px;background:#fbfbf7;border-radius:24px 24px 0 0;display:flex;flex-direction:column}
+.c .verse{flex:1;display:flex;flex-direction:column;justify-content:center;padding:32px 28px 16px}
+.c .ref{color:#4f6b5c}
+.c .ko{font-family:"Noto Serif KR";font-weight:500;color:#1c2a24;font-size:25px;line-height:40px}
+.c.long .ko{font-size:21px;line-height:34px}
+.c .en{color:#4b5650}.c .enref{color:#76807a}
+.c .dock{padding:0 20px 8px}
+.c .search{background:#eef1ea;color:#5d6a62}
+.c .upd{color:#76807a}
+.c .gesture{background:#fbfbf7}
+
+/* current, for comparison */
+.now{background:#b2d7a3}
+.now .poster{margin-top:16px}
+.now .verse{flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px 38px}
+.now .ref{font-weight:600;color:rgba(31,58,50,.62)}
+.now .ko{font-weight:700;font-size:23px;line-height:1.4;letter-spacing:-.02em;color:#1f3a32;margin-top:10px}
+.now .rule{width:24px;height:2px;background:#fff;margin:22px 0 0}
+.now .en{color:rgba(31,58,50,.72);margin-top:18px}
+.now .enref{font:500 11px Inter;letter-spacing:.08em;text-transform:uppercase;color:rgba(31,58,50,.5);margin-top:10px}
+.now .dock{padding:4px 20px 8px}
+.now .search{height:58px;border-radius:29px;background:#fff;color:#667169;padding:0 22px;box-shadow:0 6px 14px -4px rgba(31,58,50,.45)}
+.now .upd{height:44px;font-size:12px;color:rgba(31,58,50,.62)}
+</style></head><body>
+<h1>AIR 홈 시안</h1>
+<p class="sub">포스터 그림은 원본 그대로 · 굵기 700 → 500, 대문자 영문 출처 → 보통 표기, 장식 선 제거, 글자색 4단계 → 3단계, 4px 간격 · 검색창 알약 모양 → 모서리 14</p>
+<div class="row" id="r1"></div>
+<div class="row" id="r2"></div>
+<template id="t">
+ <div class="status"><span>9:41</span><svg width="44" height="12" viewBox="0 0 44 12"><path fill="currentColor" d="M0 12 10 2v10zM16 4a9 9 0 0 1 10 0l-5 7z" opacity=".9"/><rect x="30" y="1" width="12" height="10" rx="2" fill="currentColor" opacity=".9"/></svg></div>
+ <img class="poster" src="source.jpg">
+ <!--body-->
+ <div class="gesture"><i></i></div>
+</template>
+<script>
+const V={short:['출애굽기 14:14','여호와께서 너희를 위하여 싸우시리니 너희는 가만히 있을지니라','The LORD will fight for you, and you shall be still.','Exodus 14:14'],
+long:['창세기 28:15','내가 너와 함께 있어 네가 어디로 가든지 너를 지키며 너를 이끌어 이 땅으로 돌아오게 할지라 내가 네게 허락한 것을 다 이루기까지 너를 떠나지 아니하리라 하신지라','Behold, I am with you, and will keep you, wherever you go, and will bring you again into this land. For I will not leave you until I have done that which I have spoken of to you.','Genesis 28:15']};
+const icon=c=>`<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${c}" stroke-width="1.8" stroke-linecap="round"><circle cx="10.75" cy="10.75" r="6.5"/><path d="M15.6 15.6 20 20"/></svg>`;
+const verse=(v,mark,rule)=>`<div class="verse">${mark?'<div class="mark"></div>':''}<div class="ref">${v[0]}</div><div class="ko">${v[1]}</div>${rule?'<div class="rule"></div>':''}<div class="en">${v[2]}</div><div class="enref">${v[3]}</div></div>`;
+const dock=c=>`<div class="dock"><div class="search">${icon(c)}검색</div><div class="upd">업데이트 확인</div></div>`;
+const D=[
+ ['now','지금','비교용. 위에 그림, 아래 빈 띠, 굵은 글씨, 대문자 출처',v=>verse(v,0,1)+dock('#1f3a32')],
+ ['a','A · 액자','바탕은 거의 흰색, 포스터만 초록 액자처럼. 초록이 화면 전체를 덮지 않아 색이 덜 튐',v=>verse(v)+dock('#76807a')],
+ ['b','B · 초록 벽 그대로','지금 구성을 다듬은 것. 포스터를 상태바 바로 아래 붙이고, 구절은 포스터 글줄에 맞춤. 작은 흰 문이 표시',v=>verse(v,1)+dock('#5d7266')],
+ ['c','C · 문 너머 종이','포스터 아래로 종이 한 장이 올라옴. 구절은 명조(세리프)로. 앱에 글꼴을 넣어야 해서 앱 용량 증가',v=>`<div class="sheet">${verse(v)}${dock('#5d6a62')}</div>`],
+];
+const t=document.getElementById('t').innerHTML;
+[['r1','short'],['r2','long']].forEach(([r,k])=>{
+ const row=document.getElementById(r);
+ D.forEach(([cls,name,desc,body])=>{
+  const col=document.createElement('div');col.className='col';
+  col.innerHTML=`<div class="cap">${name}${k=='long'?' · 긴 구절':''}<small>${k=='short'?desc:''}</small></div><div class="phone ${cls} ${k}">${t.replace('<!--body-->',body(V[k]))}</div>`;
+  row.appendChild(col);
+ });
+});
+</script></body></html>
