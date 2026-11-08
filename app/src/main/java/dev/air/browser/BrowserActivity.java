@@ -3,9 +3,12 @@ package dev.air.browser;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Toast;
 import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.NonNull;
@@ -14,6 +17,9 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsSessionToken;
+import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -61,6 +67,12 @@ public final class BrowserActivity extends AppCompatActivity {
         ui = ActivityBrowserBinding.inflate(getLayoutInflater());
         setContentView(ui.getRoot());
         AirInsets.apply(this, ui.root);
+        // Pages may draw beside a camera cutout; the padding below keeps ordinary pages clear of it.
+        WindowManager.LayoutParams window = getWindow().getAttributes();
+        window.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        getWindow().setAttributes(window);
+        ViewCompat.setOnApplyWindowInsetsListener(ui.root, this::applyInsets);
+        updateBars();
         prompts = new BrowserPrompts(this);
         downloads = new BrowserDownloads(this);
         permissions = new BrowserPermissions(this);
@@ -153,16 +165,46 @@ public final class BrowserActivity extends AppCompatActivity {
     private void setFullScreen(boolean enabled) {
         if (fullScreen == enabled) return;
         fullScreen = enabled;
-        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), ui.root);
         if (enabled) {
-            bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
-            bars.hide(WindowInsetsCompat.Type.systemBars());
             ui.progress.setVisibility(View.INVISIBLE);
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         } else {
-            bars.show(WindowInsetsCompat.Type.systemBars());
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         }
+        updateBars();
+    }
+
+    @Override public void onConfigurationChanged(@NonNull Configuration config) {
+        super.onConfigurationChanged(config);
+        updateBars();
+    }
+
+    /**
+     * Upright, the status bar keeps its strip above the page. Sideways, or in a video's full screen, the bars
+     * hide and the page fills the screen; a swipe from the edge shows them for a moment.
+     */
+    private void updateBars() {
+        boolean immersive = fullScreen
+                || getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), ui.root);
+        bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+        if (immersive) bars.hide(WindowInsetsCompat.Type.systemBars());
+        else bars.show(WindowInsetsCompat.Type.systemBars());
+        // Any strip left beside a cutout blends into the bezel instead of showing as a white band.
+        ui.root.setBackgroundColor(immersive ? Color.BLACK : ContextCompat.getColor(this, R.color.paper));
+        ViewCompat.requestApplyInsets(ui.root);
+    }
+
+    /** Hidden bars report no space, so only a cutout pads a sideways page; a full-screen video uses every pixel. */
+    private WindowInsetsCompat applyInsets(View view, WindowInsetsCompat insets) {
+        Insets keyboard = insets.getInsets(WindowInsetsCompat.Type.ime());
+        if (fullScreen) {
+            view.setPadding(0, 0, 0, keyboard.bottom);
+        } else {
+            Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            view.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, keyboard.bottom));
+        }
+        return insets;
     }
 
     private final class NavigationDelegate implements GeckoSession.NavigationDelegate {
