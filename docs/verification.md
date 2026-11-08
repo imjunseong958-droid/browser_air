@@ -2,6 +2,14 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Korean captions that were not turning on — 8 November 2026
+
+On the latest release, captions still did not turn on. `captions.js` asked the player for its caption list without `includeAsr`, and YouTube leaves auto-generated (asr) tracks out of that list unless asked, so a video with only auto captions, as most have, looked like a video with no captions. The script also stopped after its first `setOption`, even when an ad or the video's start reset the captions afterwards.
+
+The extension (version 1.3) now asks for auto-generated tracks too, falls back to the caption list in the video's player response, waits while an ad plays, and keeps trying for about 20 seconds until the player reports Korean captions (a Korean track, or a translation to Korean). Once it does, the script leaves that video alone, so turning captions off still holds.
+
+Checked with Node against stub players, old and new script: an English auto-caption-only video stayed without captions before and now shows `en→ko`; a player that drops the first track choice stayed without captions before and now gets it on the second try; written Korean, an ad before the video, and a video without captions behave as before. YouTube is not reachable from this machine, so this was not run in GeckoView or on a device.
+
 ## Sideways full screen and Korean captions — 8 November 2026
 
 Sideways, the browser hid nothing: the status bar's white strip stayed above the page and shrank YouTube's video. Turning the phone sideways now hides the system bars and fills the screen; only a camera cutout keeps a black strip. A video's full screen fills the cutout area too. Upright pages keep the status bar strip.
