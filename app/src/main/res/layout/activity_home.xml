@@ -1,70 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="@color/wall">
 
-    <!-- The verse wall fills the whole screen, behind the status and navigation bars. -->
-    <ImageView android:layout_width="match_parent" android:layout_height="match_parent" android:scaleType="centerCrop" android:src="@drawable/home_wall" android:importantForAccessibility="no" />
-
-    <LinearLayout
-        android:id="@+id/root"
+    <!-- The poster is shown whole and unchanged, edge to edge; its green matches the screen so its edges disappear. -->
+    <ImageView
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:adjustViewBounds="true"
+        android:scaleType="fitCenter"
+        android:src="@drawable/home_poster"
+        android:importantForAccessibility="no" />
 
-        <!-- A long verse or a large system font scrolls here rather than pushing the search bar off the screen. -->
-        <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true" android:overScrollMode="never" android:scrollbars="none">
-            <!-- Today's verse stands in an open, lit doorway in the middle of the wall. -->
-            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:orientation="vertical" android:paddingHorizontal="44dp" android:paddingTop="32dp" android:paddingBottom="12dp">
-                <LinearLayout
-                    android:id="@+id/verse"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="380dp"
-                    android:background="@drawable/bg_verse_door"
-                    android:elevation="18dp"
-                    android:outlineAmbientShadowColor="@color/white"
-                    android:outlineSpotShadowColor="@color/ink"
-                    android:gravity="center_vertical"
-                    android:orientation="vertical"
-                    android:paddingHorizontal="24dp"
-                    android:paddingVertical="32dp">
-                    <TextView android:id="@+id/verseReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/accent" android:textSize="13sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.02" />
-                    <TextView android:id="@+id/verseKorean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:textColor="@color/ink" android:textSize="21sp" android:fontFamily="serif" android:lineSpacingMultiplier="1.42" />
-                    <View android:layout_width="28dp" android:layout_height="1.5dp" android:layout_marginTop="22dp" android:background="@color/breeze" />
-                    <TextView android:id="@+id/verseEnglish" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:textColor="@color/muted" android:textSize="14sp" android:textStyle="italic" android:fontFamily="serif" android:lineSpacingMultiplier="1.38" />
-                    <TextView android:id="@+id/verseEnglishReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/muted" android:textSize="12sp" />
-                </LinearLayout>
-                <!-- Light from the doorway falls on the floor below it. -->
-                <View android:layout_width="match_parent" android:layout_height="44dp" android:background="@drawable/bg_door_light" />
-            </LinearLayout>
-        </ScrollView>
-
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingTop="4dp" android:paddingBottom="8dp" android:clipToPadding="false">
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/searchButton"
-                style="@style/Air.SearchPill"
-                android:layout_width="match_parent"
-                android:layout_height="58dp"
-                android:elevation="4dp"
-                android:outlineAmbientShadowColor="@color/ink"
-                android:outlineSpotShadowColor="@color/ink"
-                android:text="@string/search_open"
-                app:drawableStartCompat="@drawable/ic_search"
-                app:drawableTint="@color/ink" />
-            <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/ink" android:textSize="12sp" android:visibility="gone" />
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/updateButton"
-                style="@style/Widget.AppCompat.Button.Borderless"
-                android:layout_width="match_parent"
-                android:layout_height="44dp"
-                android:layout_marginTop="4dp"
-                android:text="@string/update_check"
-                android:textAllCaps="false"
-                android:textColor="@color/ink"
-                android:textSize="12sp" />
+    <!-- A long verse or a large system font scrolls here rather than pushing the search bar off the screen. -->
+    <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true" android:overScrollMode="never" android:scrollbars="none">
+        <!-- The verse lines up with the poster's text column (about a tenth of the width in from each side). -->
+        <LinearLayout
+            android:id="@+id/verse"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="vertical"
+            android:paddingHorizontal="38dp"
+            android:paddingVertical="24dp">
+            <TextView android:id="@+id/verseReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/ink_faint" android:textSize="13sp" android:textStyle="bold" android:letterSpacing="0.04" />
+            <TextView android:id="@+id/verseKorean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/ink" android:textSize="23sp" android:textStyle="bold" android:letterSpacing="-0.02" android:lineSpacingMultiplier="1.4" />
+            <View android:layout_width="24dp" android:layout_height="2dp" android:layout_marginTop="22dp" android:background="@color/white" />
+            <TextView android:id="@+id/verseEnglish" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:textColor="@color/ink_soft" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:lineSpacingMultiplier="1.35" />
+            <TextView android:id="@+id/verseEnglishReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/ink_hint" android:textSize="11sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.08" android:textAllCaps="true" />
         </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingTop="4dp" android:paddingBottom="8dp" android:clipToPadding="false">
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/searchButton"
+            style="@style/Air.SearchPill"
+            android:layout_width="match_parent"
+            android:layout_height="58dp"
+            android:elevation="4dp"
+            android:outlineAmbientShadowColor="@color/ink"
+            android:outlineSpotShadowColor="@color/ink"
+            android:text="@string/search_open"
+            app:drawableStartCompat="@drawable/ic_search"
+            app:drawableTint="@color/ink" />
+        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/ink_faint" android:textSize="12sp" android:visibility="gone" />
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/updateButton"
+            style="@style/Widget.AppCompat.Button.Borderless"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="4dp"
+            android:text="@string/update_check"
+            android:textAllCaps="false"
+            android:textColor="@color/ink_faint"
+            android:textSize="12sp" />
     </LinearLayout>
-</FrameLayout>
+</LinearLayout>

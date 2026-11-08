@@ -2,6 +2,9 @@
 <resources>
     <color name="paper">#F8F7F2</color>
     <color name="wall">#B2D7A3</color>
+    <color name="ink_soft">#B81F3A32</color>
+    <color name="ink_faint">#9E1F3A32</color>
+    <color name="ink_hint">#801F3A32</color>
     <color name="ink">#1F3A32</color>
     <color name="ink_pressed">#305C4B</color>
     <color name="accent">#3C7A63</color>

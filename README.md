@@ -14,7 +14,7 @@ Distributed APKs use a fixed release signing key and keep the application ID `de
 
 Transfer the APK to your device and install it. Android may ask you to allow installation from the app that opened the file.
 
-Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The home screen shows a Bible verse in Korean and English in a lit doorway on a green wall of verses about Christ's return, with **Search** below it and a small **Check for updates** button at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
+Choose AIR as your default browser on first launch so other apps can send web links to it. You can also select it under **Settings → Apps → Default apps → Browser app → AIR**. The home screen shows a Bible verse in Korean and English under the green verse poster, with **Search** below it and a small **Check for updates** button at the bottom. QR codes open through the phone's camera app. The app interface is currently in Korean.
 
 AIR includes its own GeckoView browser engine, so its APK is larger than a typical WebView app. The engine works without Chrome installed. Some passkey features may be limited on devices without Google Play services.
 

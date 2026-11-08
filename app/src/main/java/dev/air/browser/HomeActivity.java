@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -76,6 +77,10 @@ public final class HomeActivity extends AppCompatActivity {
         // Word joiners keep each Korean word whole at a line's end on every Android version and device language.
         ui.verseKorean.setText(verse.ko().replaceAll("(?<=\\S)(?=\\S)", "⁠"));
         ui.verseKorean.setContentDescription(verse.ko());
+        // A long verse steps down one size so it still fits under the poster on a typical phone.
+        boolean longVerse = verse.ko().length() > 60;
+        ui.verseKorean.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 20 : 23);
+        ui.verseEnglish.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 13.5f : 15);
         ui.verseEnglish.setText(verse.en());
         ui.verseEnglishReference.setText(verse.referenceEn());
         ui.verse.setAlpha(0f);
