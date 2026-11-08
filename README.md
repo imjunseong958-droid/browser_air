@@ -57,7 +57,8 @@ Publishing uses GitHub Releases, with no separately operated update server. CI f
 - Preserves `window.opener` and `postMessage` connections for login popups. One session is visible at a time, with at most two additional popup sessions; a further new-window link opens in the page showing now.
 - Supports JavaScript dialogs, choice forms, HTTP authentication, date inputs, file uploads, and FedCM account selection. File downloads use the engine's authenticated response stream, including files a page makes itself, keep the name the server or page chose, and are limited to 100 MB.
 - Requests camera, microphone, and location permissions when needed, checking both Android permissions and the requesting site's permission. Storage access for embedded sign-ins is allowed. Notification, autoplay, and tracking-exception requests are denied.
-- Displays the current site and a lock in a read-only header. Tap it to inspect the full URL and connection security. **Finish** closes the page and popups and returns to the previous screen.
+- Shows pages full screen with no header; only a thin loading line appears at the top. Android's back gesture goes back a page, closes a popup, and closes AIR from the first page.
+- Lets you pinch to zoom on every site, including ones such as YouTube that switch zoom off. A video's full screen hides the system bars and turns the screen sideways (a portrait video stays upright); back leaves full screen first.
 
 ## Compatibility and limits
 
