@@ -21,6 +21,8 @@ public final class AirApplication extends Application {
                     .consoleOutput(false)
                     .aboutConfigEnabled(false)
                     .loginAutofillEnabled(false)
+                    // Pinch zoom works even where a page forbids it in its viewport (YouTube does).
+                    .forceUserScalableEnabled(true)
                     .trustedRecursiveResolverMode(GeckoRuntimeSettings.TRR_MODE_ONLY)
                     .trustedRecursiveResolverUri(FILTERED_DNS)
                     .build();

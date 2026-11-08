@@ -58,7 +58,7 @@
 
         <activity
             android:name=".BrowserActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
             android:exported="true"
             android:documentLaunchMode="never"
             android:windowSoftInputMode="adjustResize"

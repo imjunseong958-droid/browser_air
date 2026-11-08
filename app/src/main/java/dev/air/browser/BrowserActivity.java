@@ -2,6 +2,7 @@ package dev.air.browser;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.ActivityInfo;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.View;
@@ -13,6 +14,9 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.browser.customtabs.CustomTabsCallback;
 import androidx.browser.customtabs.CustomTabsSessionToken;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 import dev.air.browser.databinding.ActivityBrowserBinding;
 import dev.air.navigation.NavigationPolicy;
 import dev.air.navigation.WebAddress;
@@ -26,6 +30,7 @@ import org.mozilla.geckoview.AllowOrDeny;
 import org.mozilla.geckoview.GeckoResult;
 import org.mozilla.geckoview.GeckoSession;
 import org.mozilla.geckoview.GeckoSessionSettings;
+import org.mozilla.geckoview.MediaSession;
 import org.mozilla.geckoview.WebRequestError;
 import org.mozilla.geckoview.WebResponse;
 
@@ -37,7 +42,7 @@ public final class BrowserActivity extends AppCompatActivity {
     private String entryUrl;
     private String currentUrl;
     private String failedUrl;
-    private Boolean secure;
+    private boolean fullScreen;
     private boolean shuttingDown;
     private boolean canGoBack;
     private AlertDialog appPrompt;
@@ -49,7 +54,6 @@ public final class BrowserActivity extends AppCompatActivity {
     private final List<GeckoSession> sessions = new ArrayList<>();
     private final Map<GeckoSession, String> locations = new IdentityHashMap<>();
     private final Map<GeckoSession, Boolean> backStates = new IdentityHashMap<>();
-    private final Map<GeckoSession, Boolean> securityStates = new IdentityHashMap<>();
     private final Set<GeckoSession> sessionsWithPage = Collections.newSetFromMap(new IdentityHashMap<>());
 
     @Override protected void onCreate(Bundle state) {
@@ -60,12 +64,13 @@ public final class BrowserActivity extends AppCompatActivity {
         prompts = new BrowserPrompts(this);
         downloads = new BrowserDownloads(this);
         permissions = new BrowserPermissions(this);
-        ui.finishButton.setOnClickListener(view -> finish());
-        ui.backButton.setOnClickListener(view -> navigateBack());
         ui.retryButton.setOnClickListener(view -> retry());
-        ui.siteInfo.setOnClickListener(view -> showConnectionDetails());
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override public void handleOnBackPressed() { navigateBack(); }
+            @Override public void handleOnBackPressed() {
+                GeckoSession session = active();
+                if (fullScreen && session != null) session.exitFullScreen();
+                else navigateBack();
+            }
         });
         entryUrl = NavigationPolicy.resolveLink(getIntent().getDataString());
         client = CustomTabsSessionToken.getSessionTokenFromIntent(getIntent());
@@ -89,10 +94,8 @@ public final class BrowserActivity extends AppCompatActivity {
         firebaseAuth = FirebaseAuthBridge.capture(this, entryUrl);
         currentUrl = entryUrl;
         failedUrl = null;
-        showSecurity(null);
         canGoBack = false;
         ui.errorPanel.setVisibility(View.GONE);
-        updateSiteLabel(entryUrl);
         GeckoSession session = createSession();
         sessions.add(session);
         session.open(((AirApplication) getApplication()).runtime());
@@ -115,6 +118,9 @@ public final class BrowserActivity extends AppCompatActivity {
         session.setPromptDelegate(prompts);
         session.setContentDelegate(new GeckoSession.ContentDelegate() {
             @Override public void onCloseRequest(@NonNull GeckoSession requested) { closePopup(requested); }
+            @Override public void onFullScreen(@NonNull GeckoSession requested, boolean enabled) {
+                if (requested == active() || !enabled) setFullScreen(enabled);
+            }
             @Override public void onCrash(@NonNull GeckoSession crashed) {
                 failedUrl = null;
                 showError(R.string.engine_crash, R.string.engine_crash_body, true);
@@ -131,7 +137,32 @@ public final class BrowserActivity extends AppCompatActivity {
             }
         });
         session.setPermissionDelegate(permissions);
+        session.setMediaSessionDelegate(new MediaSession.Delegate() {
+            @Override public void onFullscreen(@NonNull GeckoSession source, @NonNull MediaSession media,
+                    boolean enabled, @Nullable MediaSession.ElementMetadata video) {
+                // A portrait video (a phone recording) stays upright; everything else turns sideways.
+                if (enabled && fullScreen && source == active() && video != null && video.height > video.width) {
+                    setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT);
+                }
+            }
+        });
         return session;
+    }
+
+    /** A video's full screen hides the system bars and turns the screen sideways; leaving it restores both. */
+    private void setFullScreen(boolean enabled) {
+        if (fullScreen == enabled) return;
+        fullScreen = enabled;
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), ui.root);
+        if (enabled) {
+            bars.setSystemBarsBehavior(WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            bars.hide(WindowInsetsCompat.Type.systemBars());
+            ui.progress.setVisibility(View.INVISIBLE);
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        } else {
+            bars.show(WindowInsetsCompat.Type.systemBars());
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        }
     }
 
     private final class NavigationDelegate implements GeckoSession.NavigationDelegate {
@@ -169,11 +200,7 @@ public final class BrowserActivity extends AppCompatActivity {
                 return;
             }
             locations.put(source, url);
-            if (source == active()) {
-                currentUrl = url;
-                showSecurity(securityStates.get(source));
-                updateSiteLabel(url);
-            }
+            if (source == active()) currentUrl = url;
         }
 
         @Override public void onCanGoBack(@NonNull GeckoSession source, boolean available) {
@@ -199,6 +226,7 @@ public final class BrowserActivity extends AppCompatActivity {
             sessions.add(child);
             ui.root.post(() -> {
                 if (!shuttingDown && sessions.contains(child) && child.isOpen()) {
+                    setFullScreen(false);
                     ui.geckoView.setSession(child);
                     child.setActive(true);
                     canGoBack = false;
@@ -221,17 +249,15 @@ public final class BrowserActivity extends AppCompatActivity {
 
     private final class ProgressDelegate implements GeckoSession.ProgressDelegate {
         @Override public void onPageStart(@NonNull GeckoSession source, @NonNull String uri) {
-            securityStates.remove(source);
             if (!sessions.contains(source)) return;
             locations.put(source, uri);
             if (source == active()) {
-                showSecurity(null);
                 if (ui.geckoView.getSession() != source) {
                     ui.geckoView.setSession(source);
                     source.setActive(true);
                 }
                 ui.errorPanel.setVisibility(View.GONE);
-                ui.progress.setVisibility(View.VISIBLE);
+                if (!fullScreen) ui.progress.setVisibility(View.VISIBLE);
                 ui.progress.setProgress(8);
             }
             notifyClient(CustomTabsCallback.NAVIGATION_STARTED);
@@ -244,10 +270,6 @@ public final class BrowserActivity extends AppCompatActivity {
             if (success && !sessions.isEmpty() && source == sessions.get(0)) policy.pageLoaded();
             if (source == active()) ui.progress.setVisibility(View.INVISIBLE);
             notifyClient(success ? CustomTabsCallback.NAVIGATION_FINISHED : CustomTabsCallback.NAVIGATION_FAILED);
-        }
-        @Override public void onSecurityChange(@NonNull GeckoSession source, @NonNull SecurityInformation info) {
-            securityStates.put(source, info.isSecure && !info.isException);
-            if (source == active()) showSecurity(securityStates.get(source));
         }
     }
 
@@ -342,7 +364,6 @@ public final class BrowserActivity extends AppCompatActivity {
             failedUrl = null;
             if (pageBehind) {
                 ui.errorPanel.setVisibility(View.GONE);
-                showSecurity(currentUrl.startsWith("https:"));
             } else if (sessions.size() > 1) {
                 ui.errorPanel.setVisibility(View.GONE);
                 closePopup(session);
@@ -360,38 +381,15 @@ public final class BrowserActivity extends AppCompatActivity {
         sessions.remove(session);
         locations.remove(session);
         backStates.remove(session);
-        securityStates.remove(session);
         sessionsWithPage.remove(session);
+        if (visible) setFullScreen(false);
         if (session.isOpen()) session.close();
         if (visible && active() != null) {
             ui.geckoView.setSession(active());
             active().setActive(true);
             currentUrl = locations.get(active());
             canGoBack = backStates.getOrDefault(active(), false);
-            showSecurity(securityStates.get(active()));
-            updateSiteLabel(currentUrl);
         }
-    }
-
-    private void updateSiteLabel(String url) {
-        WebAddress address = WebAddress.parse(url);
-        ui.hostLabel.setText(address == null ? getString(R.string.app_name) : address.host());
-    }
-
-    /** True for an encrypted connection, false for an unencrypted one, and null while it is not known yet. */
-    private void showSecurity(Boolean secure) {
-        this.secure = secure;
-        ui.securityIcon.setVisibility(secure == null ? View.GONE : View.VISIBLE);
-        if (secure != null) ui.securityIcon.setImageResource(secure ? R.drawable.ic_lock : R.drawable.ic_lock_open);
-    }
-
-    private void showConnectionDetails() {
-        if (currentUrl == null) return;
-        String status = getString(secure == null ? R.string.security_pending
-                : secure ? R.string.secure_connection : R.string.insecure_connection);
-        new AlertDialog.Builder(this).setTitle(R.string.connection_details)
-                .setMessage(status + "\n\n" + currentUrl)
-                .setPositiveButton(R.string.okay, null).show();
     }
 
     String visibleHost() {
@@ -417,14 +415,13 @@ public final class BrowserActivity extends AppCompatActivity {
             showError(decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked : R.string.invalid_link,
                     decision == NavigationPolicy.Decision.BLOCK_SEARCH ? R.string.search_blocked_body : R.string.invalid_link_body, false);
         }
-        ui.siteInfo.setEnabled(false);
-        ui.siteInfo.setVisibility(View.INVISIBLE);
     }
 
     private void showError(int title, int body, boolean retry) {
         ui.errorTitle.setText(title);
         ui.errorBody.setText(body);
         ui.retryButton.setVisibility(retry ? View.VISIBLE : View.GONE);
+        setFullScreen(false);
         ui.errorPanel.setVisibility(View.VISIBLE);
         ui.progress.setVisibility(View.INVISIBLE);
     }
@@ -439,7 +436,7 @@ public final class BrowserActivity extends AppCompatActivity {
         for (GeckoSession session : sessions) {
             if (session.isOpen()) session.close();
         }
-        sessions.clear(); locations.clear(); backStates.clear(); securityStates.clear(); sessionsWithPage.clear();
+        sessions.clear(); locations.clear(); backStates.clear(); sessionsWithPage.clear();
     }
 
     @Override protected void onPause() {
