@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+:root{--g:#B2D7A3;--ink:#1F3A32;--muted:#667169}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#f1f2ee;display:flex;gap:56px;padding:56px 60px 60px;font-family:Inter,NotoKR,sans-serif;color:var(--ink)}
+.col{display:flex;flex-direction:column;gap:22px}
+.cap{font:700 15px Inter,NotoKR;letter-spacing:-.01em}.cap small{display:block;font-weight:400;font-size:13px;color:var(--muted);margin-top:4px}
+.phone{width:390px;height:844px;border-radius:46px;overflow:hidden;position:relative;background:var(--g);box-shadow:0 0 0 9px #161817,0 0 0 10px #3a3d3b,0 30px 60px -10px rgba(20,40,30,.35)}
+.status{position:absolute;top:0;left:0;right:0;height:48px;display:flex;justify-content:space-between;align-items:center;padding:4px 30px 0;font:600 15px Inter;z-index:9}
+.status .r{display:flex;gap:6px;align-items:center}
+.poster{position:absolute;top:64px;left:0;width:390px;display:block}
+.verse{position:absolute;left:38px;right:38px;top:308px;bottom:142px;display:flex;flex-direction:column;justify-content:center}
+.mark{width:7px;height:13px;background:#fff;box-shadow:0 0 10px 2px rgba(255,255,255,.8);margin-bottom:16px}
+.ref{font:700 13px NotoKR;letter-spacing:.04em;opacity:.62}
+.ko{font:700 23px/1.48 NotoKR;letter-spacing:-.025em;margin-top:10px;word-break:keep-all}
+.rule{width:24px;height:2px;background:#fff;margin:22px 0 18px}
+.en{font:500 15px/1.45 Inter;letter-spacing:-.01em;opacity:.72}
+.enref{font:600 11px Inter;letter-spacing:.08em;text-transform:uppercase;opacity:.5;margin-top:10px}
+.long .ko{font-size:20px}.long .en{font-size:13.5px}
+.dock{position:absolute;left:20px;right:20px;bottom:30px;z-index:5}
+.pill{height:58px;border-radius:29px;background:#fff;display:flex;align-items:center;gap:12px;padding:0 22px;font:400 15px NotoKR;color:var(--muted);box-shadow:0 8px 22px -6px rgba(31,58,50,.3)}
+.upd{text-align:center;font:400 12px NotoKR;margin-top:12px;opacity:.62;height:20px;line-height:20px}
+.homebar{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:var(--ink);opacity:.8;z-index:9}
+/* search open */
+.dim{position:absolute;inset:0;background:rgba(20,30,25,.3);backdrop-filter:blur(14px);z-index:6}
+.spot{position:absolute;left:16px;right:16px;top:96px;background:#fff;border-radius:24px;z-index:7;box-shadow:0 18px 40px -8px rgba(0,0,0,.3)}
+.spot .in{height:64px;display:flex;align-items:center;gap:12px;padding:0 20px;font:400 17px NotoKR}
+.caret{width:2px;height:22px;background:var(--ink);margin-left:-8px}
+.kb{position:absolute;left:0;right:0;bottom:0;height:300px;background:#d9ddd7;z-index:8;padding:10px 4px 0;display:grid;grid-template-columns:repeat(10,1fr);grid-auto-rows:44px;gap:10px 5px}
+.kb i{background:#fff;border-radius:6px;box-shadow:0 1px 0 rgba(0,0,0,.2)}
+</style></head><body>
+<template id="base">
+ <div class="status"><span>9:41</span><span class="r"><svg width="18" height="12" viewBox="0 0 18 12"><path fill="#1F3A32" d="M1 9h3v3H1zM6 6h3v6H6zM11 3h3v9h-3zM16 0h2v12h-2z"/></svg><svg width="25" height="12" viewBox="0 0 25 12"><rect x=".5" y=".5" width="21" height="11" rx="3" fill="none" stroke="#1F3A32" opacity=".5"/><rect x="2" y="2" width="16" height="8" rx="1.5" fill="#1F3A32"/></svg></span></div>
+ <img class="poster" src="source.jpg">
+ <div class="dock"><div class="pill"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F3A32" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>검색</div><div class="upd">업데이트 확인</div></div>
+ <div class="homebar"></div>
+</template>
+<div class="col"><div class="cap">앱을 열었을 때<small>원본 그림 그대로 위에, 그 아래 오늘의 말씀</small></div><div class="phone" data-v="short"></div></div>
+<div class="col"><div class="cap">긴 구절일 때<small>글자 크기만 한 단계 줄여서 같은 자리에</small></div><div class="phone long" data-v="long"></div></div>
+<div class="col"><div class="cap">검색을 눌렀을 때<small>아래 검색창은 사라지고 위 검색창 하나만</small></div><div class="phone" data-v="short" data-s="1"></div></div>
+<script>
+const V={short:['출애굽기 14:14','여호와께서 너희를 위하여 싸우시리니 너희는 가만히 있을지니라','The LORD will fight for you, and you shall be still.','Exodus 14:14'],
+long:['창세기 28:15','내가 너와 함께 있어 네가 어디로 가든지 너를 지키며 너를 이끌어 이 땅으로 돌아오게 할지라 내가 네게 허락한 것을 다 이루기까지 너를 떠나지 아니하리라 하신지라','Behold, I am with you, and will keep you, wherever you go, and will bring you again into this land. For I will not leave you until I have done that which I have spoken of to you.','Genesis 28:15']};
+document.querySelectorAll('.phone').forEach(p=>{const v=V[p.dataset.v];p.innerHTML=document.getElementById('base').innerHTML+
+`<div class="verse"><div class="ref">${v[0]}</div><div class="ko">${v[1]}</div><div class="rule"></div><div class="en">${v[2]}</div><div class="enref">${v[3]}</div></div>`;
+if(p.dataset.s){p.querySelector('.pill').style.visibility='hidden';p.querySelector('.upd').style.visibility='hidden';
+p.insertAdjacentHTML('beforeend','<div class="dim"></div><div class="spot"><div class="in"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#667169" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg><span class="caret"></span><span style="color:#9aa39c">검색</span></div></div><div class="kb">'+'<i></i>'.repeat(30)+'</div>')}});
+</script></body></html>

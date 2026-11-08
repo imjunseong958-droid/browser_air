@@ -8,6 +8,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.TypedValue;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -76,6 +77,10 @@ public final class HomeActivity extends AppCompatActivity {
         // Word joiners keep each Korean word whole at a line's end on every Android version and device language.
         ui.verseKorean.setText(verse.ko().replaceAll("(?<=\\S)(?=\\S)", "⁠"));
         ui.verseKorean.setContentDescription(verse.ko());
+        // A long verse steps down one size so it still fits under the poster on a typical phone.
+        boolean longVerse = verse.ko().length() > 60;
+        ui.verseKorean.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 20 : 23);
+        ui.verseEnglish.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 13.5f : 15);
         ui.verseEnglish.setText(verse.en());
         ui.verseEnglishReference.setText(verse.referenceEn());
         ui.verse.setAlpha(0f);
@@ -118,6 +123,14 @@ public final class HomeActivity extends AppCompatActivity {
             if (action != EditorInfo.IME_ACTION_SEARCH) return false;
             if (openSearch(search.terms.getText().toString())) dialog.dismiss();
             return true;
+        });
+        // The search box moves up into the card, so the home search bar steps aside until the card closes.
+        ui.searchButton.animate().cancel();
+        ui.searchButton.animate().alpha(0f).setDuration(150).withEndAction(() -> ui.searchButton.setVisibility(View.INVISIBLE)).start();
+        dialog.setOnDismissListener(closed -> {
+            ui.searchButton.animate().cancel();
+            ui.searchButton.setVisibility(View.VISIBLE);
+            ui.searchButton.animate().alpha(1f).setDuration(200).start();
         });
         dialog.show();
         search.terms.requestFocus();
