@@ -14,6 +14,7 @@ import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
+import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -39,7 +40,9 @@ public final class HomeActivity extends AppCompatActivity {
         roleLauncher = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {});
         ui = ActivityHomeBinding.inflate(getLayoutInflater());
         setContentView(ui.getRoot());
-        AirInsets.apply(this, ui.root);
+        // The search card's keyboard must not squeeze the home screen behind it, so home ignores the keyboard.
+        AirInsets.apply(this, ui.root, false);
+        ui.poster.setClipToOutline(true);
         ui.searchButton.setOnClickListener(view -> showSearch());
         updates = new HomeUpdates(this, ui.updateButton);
         verses = new Verses(this);
@@ -79,12 +82,17 @@ public final class HomeActivity extends AppCompatActivity {
         ui.verseKorean.setContentDescription(verse.ko());
         // A long verse steps down one size so it still fits under the poster on a typical phone.
         boolean longVerse = verse.ko().length() > 60;
-        ui.verseKorean.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 20 : 23);
-        ui.verseEnglish.setTextSize(TypedValue.COMPLEX_UNIT_SP, longVerse ? 13.5f : 15);
+        setSize(ui.verseKorean, longVerse ? 20 : 24, longVerse ? 32 : 36);
+        setSize(ui.verseEnglish, longVerse ? 14 : 15, longVerse ? 20 : 22);
         ui.verseEnglish.setText(verse.en());
         ui.verseEnglishReference.setText(verse.referenceEn());
         ui.verse.setAlpha(0f);
         ui.verse.animate().alpha(1f).setDuration(450).start();
+    }
+
+    private static void setSize(TextView text, float sizeSp, float lineHeightSp) {
+        text.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
+        text.setLineHeight(Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, lineHeightSp, text.getResources().getDisplayMetrics())));
     }
 
     /** One typed query opens Google's SafeSearch text results; there is no suggestion list or history. */

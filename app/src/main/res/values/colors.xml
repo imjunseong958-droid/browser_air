@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="paper">#F8F7F2</color>
-    <color name="wall">#B2D7A3</color>
-    <color name="ink_soft">#B81F3A32</color>
-    <color name="ink_faint">#9E1F3A32</color>
-    <color name="ink_hint">#801F3A32</color>
+    <!-- Home: a quiet page so the green poster is the only color on the screen. -->
+    <color name="page">#F3F4EF</color>
+    <color name="text_primary">#1C2A24</color>
+    <color name="text_secondary">#4B5650</color>
+    <color name="text_muted">#76807A</color>
+    <color name="verse_reference">#4F6B5C</color>
+    <color name="hairline">#141C2A24</color>
+    <color name="poster_shadow">#401C2A24</color>
     <color name="ink">#1F3A32</color>
     <color name="ink_pressed">#305C4B</color>
     <color name="accent">#3C7A63</color>

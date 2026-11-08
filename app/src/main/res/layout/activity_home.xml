@@ -5,59 +5,60 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/wall">
+    android:background="@color/page">
 
-    <!-- The poster is shown whole and unchanged, edge to edge; its green matches the screen so its edges disappear. -->
+    <!-- The poster is shown whole and unchanged, framed like a print; it is the only green on the screen. -->
     <ImageView
+        android:id="@+id/poster"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
         android:layout_marginTop="16dp"
         android:adjustViewBounds="true"
         android:scaleType="fitCenter"
+        android:background="@drawable/bg_poster"
+        android:elevation="6dp"
+        android:outlineAmbientShadowColor="@color/poster_shadow"
+        android:outlineSpotShadowColor="@color/poster_shadow"
         android:src="@drawable/home_poster"
         android:importantForAccessibility="no" />
 
     <!-- A long verse or a large system font scrolls here rather than pushing the search bar off the screen. -->
     <ScrollView android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true" android:overScrollMode="never" android:scrollbars="none">
-        <!-- The verse lines up with the poster's text column (about a tenth of the width in from each side). -->
         <LinearLayout
             android:id="@+id/verse"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="vertical"
-            android:paddingHorizontal="38dp"
+            android:paddingHorizontal="28dp"
             android:paddingVertical="24dp">
-            <TextView android:id="@+id/verseReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/ink_faint" android:textSize="13sp" android:textStyle="bold" android:letterSpacing="0.04" />
-            <TextView android:id="@+id/verseKorean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/ink" android:textSize="23sp" android:textStyle="bold" android:letterSpacing="-0.02" android:lineSpacingMultiplier="1.4" />
-            <View android:layout_width="24dp" android:layout_height="2dp" android:layout_marginTop="22dp" android:background="@color/white" />
-            <TextView android:id="@+id/verseEnglish" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:textColor="@color/ink_soft" android:textSize="15sp" android:fontFamily="sans-serif-medium" android:lineSpacingMultiplier="1.35" />
-            <TextView android:id="@+id/verseEnglishReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/ink_hint" android:textSize="11sp" android:fontFamily="sans-serif-medium" android:letterSpacing="0.08" android:textAllCaps="true" />
+            <TextView android:id="@+id/verseReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="@color/verse_reference" android:textSize="13sp" android:fontFamily="sans-serif-medium" />
+            <TextView android:id="@+id/verseKorean" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/text_primary" android:textSize="24sp" android:lineHeight="36sp" android:fontFamily="sans-serif-medium" />
+            <TextView android:id="@+id/verseEnglish" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textColor="@color/text_secondary" android:textSize="15sp" android:lineHeight="22sp" />
+            <TextView android:id="@+id/verseEnglishReference" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" android:textSize="13sp" />
         </LinearLayout>
     </ScrollView>
 
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingTop="4dp" android:paddingBottom="8dp" android:clipToPadding="false">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingHorizontal="20dp" android:paddingBottom="8dp">
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/searchButton"
             style="@style/Air.SearchPill"
             android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:elevation="4dp"
-            android:outlineAmbientShadowColor="@color/ink"
-            android:outlineSpotShadowColor="@color/ink"
+            android:layout_height="52dp"
             android:text="@string/search_open"
             app:drawableStartCompat="@drawable/ic_search"
-            app:drawableTint="@color/ink" />
-        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/ink_faint" android:textSize="12sp" android:visibility="gone" />
+            app:drawableTint="@color/text_muted" />
+        <TextView android:id="@+id/linkHint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center" android:text="@string/home_hint_not_default" android:textColor="@color/text_muted" android:textSize="13sp" android:visibility="gone" />
         <androidx.appcompat.widget.AppCompatButton
             android:id="@+id/updateButton"
             style="@style/Widget.AppCompat.Button.Borderless"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:layout_marginTop="4dp"
+            android:layout_height="40dp"
+            android:minHeight="40dp"
             android:text="@string/update_check"
             android:textAllCaps="false"
-            android:textColor="@color/ink_faint"
-            android:textSize="12sp" />
+            android:textColor="@color/text_muted"
+            android:textSize="13sp" />
     </LinearLayout>
 </LinearLayout>
