@@ -49,7 +49,7 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_paths" />
         </provider>
 
-        <activity android:name=".HomeActivity" android:exported="true">
+        <activity android:name=".HomeActivity" android:exported="true" android:windowSoftInputMode="adjustNothing">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
