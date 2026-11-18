@@ -4,16 +4,9 @@ import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
 import android.os.Bundle;
-import android.text.Editable;
-import android.text.TextWatcher;
 import android.util.TypedValue;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.Window;
-import android.view.WindowManager;
-import android.view.inputmethod.EditorInfo;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.activity.result.ActivityResultLauncher;
@@ -23,8 +16,6 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDialog;
 import dev.air.browser.databinding.ActivityHomeBinding;
-import dev.air.browser.databinding.DialogSearchBinding;
-import dev.air.navigation.NavigationPolicy;
 
 public final class HomeActivity extends AppCompatActivity {
     private static final String SHOWN_VERSE = "shown_verse";
@@ -95,41 +86,10 @@ public final class HomeActivity extends AppCompatActivity {
         text.setLineHeight(Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, lineHeightSp, text.getResources().getDisplayMetrics())));
     }
 
-    /** One typed query opens Google's SafeSearch text results; there is no suggestion list or history. */
     private void showSearch() {
-        DialogSearchBinding search = DialogSearchBinding.inflate(getLayoutInflater());
-        AppCompatDialog dialog = new AppCompatDialog(this, R.style.Air_Spotlight);
-        dialog.setContentView(search.getRoot());
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
-                    | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND);
-                WindowManager.LayoutParams attributes = window.getAttributes();
-                attributes.setBlurBehindRadius(Math.round(28 * getResources().getDisplayMetrics().density));
-                window.setAttributes(attributes);
-            }
-        }
-        search.root.setOnClickListener(view -> dialog.dismiss());
-        search.terms.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence text, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence text, int start, int before, int count) {}
-            @Override public void afterTextChanged(Editable text) {
-                String terms = text.toString().strip();
-                search.results.setVisibility(terms.isEmpty() ? View.GONE : View.VISIBLE);
-                search.clearButton.setVisibility(text.length() > 0 ? View.VISIBLE : View.GONE);
-                search.googleQuery.setText(terms);
-            }
-        });
-        search.clearButton.setOnClickListener(view -> search.terms.setText(""));
-        search.googleButton.setOnClickListener(view -> {
-            if (openSearch(search.terms.getText().toString())) dialog.dismiss();
-        });
-        search.terms.setOnEditorActionListener((view, action, event) -> {
-            if (action != EditorInfo.IME_ACTION_SEARCH) return false;
-            if (openSearch(search.terms.getText().toString())) dialog.dismiss();
+        AppCompatDialog dialog = SearchCard.show(this, url -> {
+            returningFromBrowser = true;
+            startActivity(new Intent(this, BrowserActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url)));
             return true;
         });
         // The search box moves up into the card, so the home search bar steps aside until the card closes.
@@ -140,16 +100,6 @@ public final class HomeActivity extends AppCompatActivity {
             ui.searchButton.setVisibility(View.VISIBLE);
             ui.searchButton.animate().alpha(1f).setDuration(200).start();
         });
-        dialog.show();
-        search.terms.requestFocus();
-    }
-
-    private boolean openSearch(String terms) {
-        String url = NavigationPolicy.searchUrl(terms);
-        if (url == null) return false;
-        returningFromBrowser = true;
-        startActivity(new Intent(this, BrowserActivity.class).setAction(Intent.ACTION_VIEW).setData(Uri.parse(url)));
-        return true;
     }
 
     private void showSetup() {

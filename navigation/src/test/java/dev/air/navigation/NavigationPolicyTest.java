@@ -150,6 +150,18 @@ public final class NavigationPolicyTest {
         assertEquals(AUTH_CALLBACK, policy.evaluate("myapp:/return?code=x&state=a"));
     }
 
+    @Test public void linksInADeviceFileFollowTheSameRules() {
+        NavigationPolicy policy = NavigationPolicy.forLocalFile();
+        assertEquals(ALLOW, policy.evaluate("https://shop.example/orders"));
+        assertEquals(BLOCK_COMMUNITY, policy.evaluate("https://www.reddit.com/"));
+        assertEquals(BLOCK_ADULT, policy.evaluate("https://nimi.wiki/ko"));
+        assertEquals(BLOCK_SEARCH, policy.evaluate("https://www.bing.com/search?q=a"));
+        assertEquals(OPEN_APP, policy.evaluate("tel:+821012345678"));
+        // No app opened AIR for a sign-in, so a sign-in the file leads to stays an ordinary page move.
+        assertEquals(ALLOW, policy.evaluate(oauth("identity.example", "myapp://login/callback", "a")));
+        assertEquals(OPEN_APP, policy.evaluate("myapp://login/callback?code=x&state=a"));
+    }
+
     @Test public void aPagesOwnSignInIsAnOrdinaryPageMove() {
         NavigationPolicy policy = site("https://shop.example/");
         assertEquals(ALLOW, policy.evaluate(oauth("identity.example", "https://shop.example/callback", "a")));

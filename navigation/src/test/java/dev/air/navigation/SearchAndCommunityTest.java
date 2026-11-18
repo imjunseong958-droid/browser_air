@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 
 public final class SearchAndCommunityTest {
-    private static final String SAFE = "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active";
+    private static final String SAFE = "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&hl=en&lr=lang_en";
     private NavigationPolicy loaded(String url) {
         var policy = new NavigationPolicy(url);
         policy.pageLoaded();
@@ -18,7 +18,7 @@ public final class SearchAndCommunityTest {
 
     @Test public void typedTermsOpenSafeSearchTextResults() {
         assertEquals(SAFE, NavigationPolicy.searchUrl("  night pharmacy "));
-        assertEquals("https://www.google.com/search?q=%EC%95%BD%EA%B5%AD&udm=14&safe=active", NavigationPolicy.searchUrl("약국"));
+        assertEquals("https://www.google.com/search?q=%EC%95%BD%EA%B5%AD&udm=14&safe=active&hl=en&lr=lang_en", NavigationPolicy.searchUrl("약국"));
         assertNull(NavigationPolicy.searchUrl("   "));
         assertNull(NavigationPolicy.searchUrl(null));
         assertEquals(SAFE, NavigationPolicy.resolveLink(SAFE));
@@ -36,6 +36,22 @@ public final class SearchAndCommunityTest {
         }
         assertEquals(SAFE + "&start=10", NavigationPolicy.resolveLink("https://www.google.com/search?q=night+pharmacy&start=10&sca_esv=x"));
         assertEquals(SAFE, NavigationPolicy.resolveLink("https://www.google.com/search?q=night+pharmacy&start=-1"));
+    }
+
+    @Test public void resultsComeFromEnglishPagesOnly() {
+        for (String url : new String[] {"https://www.google.com/search?q=night+pharmacy&udm=14&safe=active",
+                "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&hl=ko&lr=lang_en",
+                "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&hl=en&lr=lang_ko",
+                "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&hl=en&lr="}) {
+            assertEquals(url, SAFE, NavigationPolicy.resolveLink(url));
+            assertEquals(url, ALLOW, loaded("https://example.com/").evaluate(url));
+        }
+        assertEquals(SAFE + "&start=10", NavigationPolicy.resolveLink(
+                "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&start=10"));
+        // Language is a preference: an in-page address change that drops it is not refused, and frames are not rewritten.
+        String korean = "https://www.google.com/search?q=night+pharmacy&udm=14&safe=active";
+        assertEquals(ALLOW, NavigationPolicy.pageChange(SAFE, korean));
+        assertEquals(ALLOW, NavigationPolicy.evaluateFrame(korean));
     }
 
     @Test public void safeResultsKeepGoogleOwnParametersAndPagination() {

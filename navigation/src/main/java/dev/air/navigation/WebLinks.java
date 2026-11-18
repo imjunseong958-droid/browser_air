@@ -55,9 +55,10 @@ final class WebLinks {
         return null;
     }
 
+    /** SafeSearch text results from English pages only, with Google itself in English. */
     static String searchUrl(String terms) {
         if (terms == null || terms.isBlank()) return null;
-        return SAFE_SEARCH + "?q=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8) + "&udm=14&safe=active";
+        return SAFE_SEARCH + "?q=" + URLEncoder.encode(terms.strip(), StandardCharsets.UTF_8) + "&udm=14&safe=active&hl=en&lr=lang_en";
     }
 
     /** Going straight from one video to another follows a recommendation, unless both share a chosen playlist. */
@@ -79,10 +80,13 @@ final class WebLinks {
         return video == null || video.isBlank() ? null : video;
     }
 
-    /** Google search opens only as SafeSearch text results; image, video and other tabs collapse into it. */
+    /**
+     * Google search opens only as SafeSearch text results from English pages; image, video and other tabs, and other
+     * languages, collapse into it.
+     */
     private static String safeSearch(WebAddress address, String input) {
         Map<String, String> query = address.parameters();
-        if (!address.scheme().equals("https") || address.port() != 443 || isSafeSearch(address)) return input;
+        if (!address.scheme().equals("https") || address.port() != 443 || (isSafeSearch(address) && isEnglish(address))) return input;
         String terms = searchUrl(query.get("q"));
         if (terms == null) return input;
         String start = query.get("start");
@@ -95,6 +99,15 @@ final class WebLinks {
         return address.scheme().equals("https") && address.port() == 443 && GOOGLE_LINK_HOSTS.contains(address.host())
                 && address.normalizedPath().equals("/search") && terms != null && !terms.isBlank()
                 && "active".equals(query.get("safe")) && "14".equals(query.get("udm")) && !query.containsKey("tbm");
+    }
+
+    /**
+     * Results limited to English pages ({@code lr}) with Google in English ({@code hl}). This is a preference, not a
+     * safety rule: a page that drops it is rewritten when it loads, but an address change without a load is not refused.
+     */
+    private static boolean isEnglish(WebAddress address) {
+        Map<String, String> query = address.parameters();
+        return "lang_en".equals(query.get("lr")) && "en".equals(query.get("hl"));
     }
 
     static boolean isCommunity(WebAddress address) {

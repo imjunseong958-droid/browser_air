@@ -70,6 +70,13 @@
                 <data android:scheme="http" />
                 <data android:scheme="https" />
             </intent-filter>
+            <!-- PDFs from Files, mail and messengers open in the engine's PDF viewer. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" />
+                <data android:mimeType="application/pdf" />
+            </intent-filter>
         </activity>
 
         <service android:name=".AirCustomTabsService" android:exported="true">

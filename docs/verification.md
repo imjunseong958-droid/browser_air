@@ -2,6 +2,29 @@
 
 Initial browser verification was performed on **14 October 2026 (Asia/Seoul)**. SMS automatic sign-in was completed and checked on **15 October 2026 (Asia/Seoul)** using an ARM64 Pixel 7 emulator running Android 15 (API 35). The app was built for Android 10 and later. No real user accounts or personal login credentials were used.
 
+## Tabs, English search and videos, and PDFs — 18 November 2026
+
+**Tabs.** `BrowserActivity` now keeps a list of tabs (`BrowserTab`) instead of one page and two popups. A popup or new-window link becomes a tab that shares the opener's rules, as popups did; a link held down can open in a new tab, which is checked like following it (`entryDecision`, then `pageChange` from the page it was held on). The counter in the corner opens `TabsSheet`; a new tab starts from the same search card as home (`SearchCard`). Each tab keeps its own address, back state, loading line, failed link, and error panel. **Behavior change:** `onNewSession` now also refuses a new window from a YouTube video to another video, which the old popup path let through.
+
+**English search.** Typed searches add `hl=en&lr=lang_en`, and a Google search without both is rewritten to them on load. Blocking still depends only on SafeSearch: an in-page address change that drops the language is allowed. Fetched with curl, Google kept `hl` and `lr` through its no-JavaScript redirect. Results in a browser could not be checked because loading Google search in headless Chromium was refused here.
+
+**English videos.** `english.js` (extension 1.4) was run in headless Chromium against live `m.youtube.com`, with a Firefox for Android user agent, a Korean locale, and no cookies:
+
+| Search | Shown | Hidden |
+|---|---|---|
+| weather | 14, all English | 4, in Bengali and Telugu |
+| bts | 19, including `BTS (방탄소년단) 'Dynamite' Official MV` | 6: Korean, Chinese, and Arabic titles, and English titles from Korean and Japanese channels |
+| 날씨 | none, with further loading stopped and the "search in English" note | all 20 |
+
+Each page was in English after one reload (`PREF=hl=en&gl=US`). Without the script, a "weather" search in Korean mixed Korean news with English titles machine-translated into Korean.
+
+Korean captions still turned on with YouTube in English: an English TED talk got English captions translated to Korean.
+
+**PDFs.** GeckoView 158's own prefs enable pdf.js (`pdfjs.disabled` unset, `pdfjs.handleOctetStream` and `browser.download.open_pdf_attachments_inline` true), so web PDFs already opened in the viewer. For device files, the engine's `ContentInputStream` reads a `content:` address only when the app may read it and the file starts with `%PDF-`. Its `GeckoViewNavigation` gives an app-started `content:` load the system principal. Both were read from the AAR's bytecode and `omni.ja`. AIR now accepts `application/pdf` `content:` intents and a document picker, and lets a file tab load only its own file.
+
+- 43 navigation tests (new: English rewrite, links in a device file), update tests, and verse tests passed. Debug and release builds passed, and Lint Debug and Release found no errors. The instrumented-test APK built; its new tab tests (holding a link, the tab list, four new-window tabs) were not run.
+- No emulator could run here (no KVM), so tabs, the tab list, link holding, PDF opening, and the YouTube extension inside GeckoView were not tried on a device or emulator.
+
 ## Pull down to reload — 8 November 2026
 
 Pulling down from the top of a page now reloads it. `AirGeckoView` asks Gecko, at the start of each touch, for its input result: a pull counts only when the browser (not the page's script) handles the touch, the page cannot scroll further up, and it allows vertical overscroll. Every touch still reaches the page. Two fingers, a sideways drag, a video's full screen, and the error panel never reload. A turning arrow follows the finger and goes solid past 120 dp.
