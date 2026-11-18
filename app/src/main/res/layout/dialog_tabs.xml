@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The open tabs as a sheet from the bottom: tap one to show it, × closes it; a new tab starts from a search. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_sheet"
+    android:orientation="vertical"
+    android:paddingHorizontal="12dp"
+    android:paddingTop="10dp"
+    android:paddingBottom="16dp">
+
+    <View android:layout_width="36dp" android:layout_height="4dp" android:layout_gravity="center_horizontal" android:background="@drawable/bg_sheet_handle" />
+    <TextView android:id="@+id/tabsTitle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:paddingHorizontal="8dp" android:textColor="@color/ink" android:textSize="18sp" android:textStyle="bold" android:accessibilityHeading="true" />
+    <ScrollView android:id="@+id/tabsScroll" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:fadeScrollbars="true" android:overScrollMode="never">
+        <LinearLayout android:id="@+id/tabsList" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+    </ScrollView>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:orientation="horizontal">
+        <Button android:id="@+id/newTabButton" style="@style/Air.PrimaryButton" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:minHeight="52dp" android:text="@string/new_tab" />
+        <Button android:id="@+id/openPdfButton" style="@style/Air.QuietButton" android:layout_width="0dp" android:layout_height="52dp" android:layout_weight="1" android:layout_marginStart="10dp" android:minHeight="52dp" android:text="@string/open_pdf" />
+    </LinearLayout>
+</LinearLayout>

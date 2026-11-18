@@ -66,13 +66,7 @@ public final class BrowserIntegrationTest {
     }
     private String displayedUrl() {
         AtomicReference<String> value = new AtomicReference<>();
-        scenario.onActivity(activity -> {
-            try {
-                var field = BrowserActivity.class.getDeclaredField("currentUrl");
-                field.setAccessible(true);
-                value.set((String) field.get(activity));
-            } catch (ReflectiveOperationException error) { throw new AssertionError(error); }
-        });
+        scenario.onActivity(activity -> value.set(activity.currentUrl()));
         return value.get();
     }
     private void awaitUrl(String suffix) {
@@ -117,7 +111,7 @@ public final class BrowserIntegrationTest {
             google.click();
             var browser = InstrumentationRegistry.getInstrumentation().waitForMonitorWithTimeout(opened, 10_000);
             assertNotNull("Search did not open the browser", browser);
-            assertEquals("https://www.google.com/search?q=night+pharmacy&udm=14&safe=active", browser.getIntent().getDataString());
+            assertEquals("https://www.google.com/search?q=night+pharmacy&udm=14&safe=active&hl=en&lr=lang_en", browser.getIntent().getDataString());
             browser.finish();
         } finally { InstrumentationRegistry.getInstrumentation().removeMonitor(opened); }
     }
@@ -207,6 +201,32 @@ public final class BrowserIntegrationTest {
         text("NEW_WINDOW_3").click();
         text("NEW_WINDOW_4").click();
         text("LAST_WINDOW");
+        assertNotNull("Each new window is a tab", device.wait(Until.findObject(By.desc("탭 4개")), 10_000));
+    }
+
+    @Test public void aLinkHeldDownOpensInANewTabAndBackReturnsToTheFirst() {
+        open(server.url("/"));
+        text("SAME_SITE_LINK").longClick();
+        text("새 탭에서 열기").click();
+        text("INSIDE_PAGE");
+        awaitUrl("/inside");
+        assertNotNull(device.wait(Until.findObject(By.desc("탭 2개")), 10_000));
+        device.pressBack();
+        text("SAME_SITE_LINK");
+        awaitUrl("/");
+        assertNotNull(device.wait(Until.findObject(By.desc("탭 1개")), 10_000));
+    }
+
+    @Test public void theTabListSwitchesTabs() {
+        open(server.url("/"));
+        text("LOGIN_POPUP").click();
+        text("POPUP_PAGE");
+        device.wait(Until.findObject(By.desc("탭 2개")), 10_000).click();
+        text("탭 2개");
+        assertTrue(device.wait(Until.findObjects(By.textContains("localhost")), 10_000).size() >= 2);
+        device.findObjects(By.textContains("localhost")).get(0).click();
+        text("SAME_SITE_LINK");
+        awaitUrl("/");
     }
 
     @Test public void linksWithUnusualCharactersOpen() {

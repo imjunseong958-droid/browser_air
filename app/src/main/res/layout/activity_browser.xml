@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- No header: the page fills the screen. Android's back gesture goes back a page and closes AIR from the first one. -->
+<!-- No header: the page fills the screen, with only a small tab counter in the corner. Android's back gesture goes back
+     a page, closes a tab from its first page, and closes AIR from the last one. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root"
     android:layout_width="match_parent"
@@ -13,6 +14,7 @@
         <TextView android:id="@+id/errorBody" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:gravity="center" android:textColor="@color/muted" android:textSize="14sp" android:lineSpacingMultiplier="1.35" />
         <Button android:id="@+id/retryButton" style="@style/Air.PrimaryButton" android:layout_width="wrap_content" android:layout_height="52dp" android:layout_marginTop="28dp" android:minWidth="160dp" android:text="@string/retry" />
     </LinearLayout>
+    <TextView android:id="@+id/tabsButton" android:layout_width="44dp" android:layout_height="44dp" android:layout_gravity="bottom|end" android:layout_margin="14dp" android:background="@drawable/bg_tab_counter" android:clickable="true" android:focusable="true" android:gravity="center" android:elevation="6dp" android:fontFamily="sans-serif-medium" android:textColor="@color/white" android:textSize="16sp" android:visibility="gone" />
     <ImageView android:id="@+id/pullIndicator" android:layout_width="40dp" android:layout_height="40dp" android:layout_gravity="top|center_horizontal" android:background="@drawable/bg_icon_circle" android:padding="8dp" android:src="@drawable/ic_refresh" android:elevation="4dp" android:importantForAccessibility="no" android:visibility="gone" />
     <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleHorizontal" android:layout_width="match_parent" android:layout_height="2dp" android:layout_gravity="top" android:progressTint="@color/accent" android:progressBackgroundTint="@android:color/transparent" android:visibility="invisible" />
 </FrameLayout>
