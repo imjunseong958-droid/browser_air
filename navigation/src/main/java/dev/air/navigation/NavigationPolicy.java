@@ -30,6 +30,14 @@ public final class NavigationPolicy {
         noteSignIn(entry);
     }
 
+    private NavigationPolicy() { settled = true; }
+
+    /**
+     * Links in a file opened from the device, such as a PDF from the Files app. No app is waiting for a sign-in from
+     * it, so every sign-in it leads to is an ordinary move between pages.
+     */
+    public static NavigationPolicy forLocalFile() { return new NavigationPolicy(); }
+
     public static String resolveLink(String url) { return WebLinks.resolve(url); }
 
     /** The SafeSearch text results for typed terms, or null when there is nothing to search. */
